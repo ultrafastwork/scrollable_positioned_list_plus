@@ -47,7 +47,11 @@ class _InheritedRegistryWidget extends InheritedWidget {
   final _RegistryWidgetState state;
 
   @override
-  bool updateShouldNotify(InheritedWidget oldWidget) => true;
+  // Dependents only use this to locate the registry state, which is stable for
+  // the lifetime of the registry. Notifying on every rebuild would mark every
+  // registered item element dirty each time the list rebuilds.
+  bool updateShouldNotify(_InheritedRegistryWidget oldWidget) =>
+      !identical(state, oldWidget.state);
 }
 
 class _RegisteredElement extends ProxyElement {

@@ -165,6 +165,32 @@ void main() {
     expect(scrollSummer.totalScroll, 0);
   });
 
+  testWidgets('Manual scroll is still reported after a long programmatic scroll',
+      (WidgetTester tester) async {
+    final scrollDistance = 50.0;
+
+    final itemScrollController = ItemScrollController();
+    final ScrollSum scrollSummer = ScrollSum();
+
+    await setUpWidgetTest(tester,
+        itemScrollController: itemScrollController,
+        scrollOffsetListener: scrollSummer.scrollOffsetListener,
+        initialIndex: 5);
+
+    // Far enough to use the two-list transition, which swaps primary and
+    // secondary lists when it finishes.
+    unawaited(
+        itemScrollController.scrollTo(index: 100, duration: scrollDuration));
+    await tester.pumpAndSettle();
+    expect(scrollSummer.totalScroll, 2 * screenHeight);
+
+    await tester.drag(
+        find.byType(ScrollablePositionedList), Offset(0, -scrollDistance));
+    await tester.pumpAndSettle();
+
+    expect(scrollSummer.totalScroll, 2 * screenHeight + scrollDistance);
+  });
+
   testWidgets('Manual scroll up 10 pixels with programmatic recording off',
       (WidgetTester tester) async {
     final scrollDistance = 50.0;

@@ -139,11 +139,15 @@ class _PositionedListState extends State<PositionedList> {
   final registeredElements = ValueNotifier<Set<Element>?>(null);
   late final ScrollController scrollController;
 
+  /// Whether [scrollController] was created here (and must be disposed here).
+  late final bool _ownsScrollController;
+
   bool updateScheduled = false;
 
   @override
   void initState() {
     super.initState();
+    _ownsScrollController = widget.controller == null;
     scrollController = widget.controller ?? ScrollController();
     scrollController.addListener(_schedulePositionNotificationUpdate);
     _schedulePositionNotificationUpdate();
@@ -152,6 +156,8 @@ class _PositionedListState extends State<PositionedList> {
   @override
   void dispose() {
     scrollController.removeListener(_schedulePositionNotificationUpdate);
+    if (_ownsScrollController) scrollController.dispose();
+    registeredElements.dispose();
     super.dispose();
   }
 
@@ -310,20 +316,26 @@ class _PositionedListState extends State<PositionedList> {
       updateScheduled = true;
       SchedulerBinding.instance.addPostFrameCallback((_) {
         final elements = registeredElements.value;
-        if (elements == null) {
+        // The list may have been disposed, or not yet attached to a scroll
+        // position, by the time this frame callback runs.
+        if (!mounted || elements == null || !scrollController.hasClients) {
           updateScheduled = false;
           return;
         }
+        final viewportDimension = scrollController.position.viewportDimension;
         final positions = <ItemPosition>[];
         RenderViewportBase? viewport;
+        var anchor = 0.0;
         for (var element in elements) {
           final box = element.renderObject! as RenderBox;
-          viewport ??= RenderAbstractViewport.of(box) as RenderViewportBase?;
-          final anchor = switch (viewport) {
-            final RenderViewport v => v.anchor,
-            final CustomRenderViewport v => v.anchor,
-            _ => 0.0,
-          };
+          if (viewport == null) {
+            viewport = RenderAbstractViewport.of(box) as RenderViewportBase?;
+            anchor = switch (viewport) {
+              final RenderViewport v => v.anchor,
+              final CustomRenderViewport v => v.anchor,
+              _ => 0.0,
+            };
+          }
 
           final key = element.widget.key! as ValueKey<int>;
           // Skip this element if `box` has never been laid out.
@@ -336,12 +348,9 @@ class _PositionedListState extends State<PositionedList> {
             positions.add(
               ItemPosition(
                 index: key.value,
-                itemLeadingEdge:
-                    itemOffset.round() /
-                    scrollController.position.viewportDimension,
+                itemLeadingEdge: itemOffset.round() / viewportDimension,
                 itemTrailingEdge:
-                    (itemOffset + box.size.height).round() /
-                    scrollController.position.viewportDimension,
+                    (itemOffset + box.size.height).round() / viewportDimension,
               ),
             );
           } else {
@@ -354,18 +363,16 @@ class _PositionedListState extends State<PositionedList> {
                 index: key.value,
                 itemLeadingEdge:
                     (widget.reverse
-                            ? scrollController.position.viewportDimension -
-                                  (itemOffset + box.size.width)
+                            ? viewportDimension - (itemOffset + box.size.width)
                             : itemOffset)
                         .round() /
-                    scrollController.position.viewportDimension,
+                    viewportDimension,
                 itemTrailingEdge:
                     (widget.reverse
-                            ? scrollController.position.viewportDimension -
-                                  itemOffset
+                            ? viewportDimension - itemOffset
                             : (itemOffset + box.size.width))
                         .round() /
-                    scrollController.position.viewportDimension,
+                    viewportDimension,
               ),
             );
           }

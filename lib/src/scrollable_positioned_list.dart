@@ -313,6 +313,10 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
 
   final opacity = ProxyAnimation(const AlwaysStoppedAnimation<double>(0));
 
+  /// Opacity of the primary list. Cached so [FadeTransition] doesn't
+  /// resubscribe to a fresh animation object on every build.
+  late final Animation<double> _primaryOpacity = ReverseAnimation(opacity);
+
   void Function() startAnimationCallback = () {};
 
   bool _isTransitioning = false;
@@ -325,7 +329,7 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
   void initState() {
     super.initState();
     final initialPosition =
-        PageStorage.of(context).readState(context) as ItemPosition?;
+        PageStorage.maybeOf(context)?.readState(context) as ItemPosition?;
     primary.target = initialPosition?.index ?? widget.initialScrollIndex;
     primary.alignment =
         initialPosition?.itemLeadingEdge ?? widget.initialAlignment;
@@ -336,15 +340,29 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
     widget.scrollOffsetController?._attach(this);
     primary.itemPositionsNotifier.itemPositions.addListener(_updatePositions);
     secondary.itemPositionsNotifier.itemPositions.addListener(_updatePositions);
-    primary.scrollController.addListener(() {
-      final currentOffset = primary.scrollController.offset;
-      final offsetChange = currentOffset - previousOffset;
-      previousOffset = currentOffset;
-      if (!_isTransitioning ||
-          (widget.scrollOffsetNotifier?.recordProgrammaticScrolls ?? false)) {
-        widget.scrollOffsetNotifier?.changeController.add(offsetChange);
-      }
-    });
+    // Listen on both controllers: [primary] and [secondary] swap roles after a
+    // long-distance scroll, and offset changes must keep being reported from
+    // whichever one is currently primary.
+    final pingController = primary.scrollController;
+    final pongController = secondary.scrollController;
+    _pingScrollListener = () => _onScroll(pingController);
+    _pongScrollListener = () => _onScroll(pongController);
+    pingController.addListener(_pingScrollListener);
+    pongController.addListener(_pongScrollListener);
+  }
+
+  late final VoidCallback _pingScrollListener;
+  late final VoidCallback _pongScrollListener;
+
+  void _onScroll(ScrollController source) {
+    if (!identical(source, primary.scrollController)) return;
+    final currentOffset = source.offset;
+    final offsetChange = currentOffset - previousOffset;
+    previousOffset = currentOffset;
+    if (!_isTransitioning ||
+        (widget.scrollOffsetNotifier?.recordProgrammaticScrolls ?? false)) {
+      widget.scrollOffsetNotifier?.changeController.add(offsetChange);
+    }
   }
 
   @override
@@ -370,6 +388,10 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
       _updatePositions,
     );
     _animationController?.dispose();
+    for (final details in [primary, secondary]) {
+      details.scrollController.dispose();
+      details.itemPositionsNotifier.itemPositions.dispose();
+    }
     super.dispose();
   }
 
@@ -383,23 +405,22 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
       widget.itemScrollController?._detach();
       widget.itemScrollController?._attach(this);
     }
+    if (oldWidget.scrollOffsetController?._scrollableListState == this) {
+      oldWidget.scrollOffsetController?._detach();
+    }
+    if (widget.scrollOffsetController?._scrollableListState != this) {
+      widget.scrollOffsetController?._detach();
+      widget.scrollOffsetController?._attach(this);
+    }
 
+    // No setState needed: build always runs after didUpdateWidget.
     if (widget.itemCount == 0) {
-      setState(() {
-        primary.target = 0;
-        secondary.target = 0;
-      });
+      primary.target = 0;
+      secondary.target = 0;
     } else {
-      if (primary.target > widget.itemCount - 1) {
-        setState(() {
-          primary.target = widget.itemCount - 1;
-        });
-      }
-      if (secondary.target > widget.itemCount - 1) {
-        setState(() {
-          secondary.target = widget.itemCount - 1;
-        });
-      }
+      final lastIndex = widget.itemCount - 1;
+      if (primary.target > lastIndex) primary.target = lastIndex;
+      if (secondary.target > lastIndex) secondary.target = lastIndex;
     }
   }
 
@@ -416,7 +437,7 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
                 key: primary.key,
                 callback: startAnimationCallback,
                 child: FadeTransition(
-                  opacity: ReverseAnimation(opacity),
+                  opacity: _primaryOpacity,
                   child: NotificationListener<ScrollNotification>(
                     onNotification: (_) => _isTransitioning,
                     child: PositionedList(
@@ -486,11 +507,13 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
     widget.minCacheExtent ?? 0,
   );
 
+  /// Clamps [index] into `[0, itemCount - 1]` (or 0 for an empty list), so an
+  /// out-of-range request never reaches [ScrollablePositionedList.itemBuilder].
+  int _clampIndex(int index) => index.clamp(0, max(0, widget.itemCount - 1));
+
   void _jumpTo({required int index, required double alignment}) {
     _stopScroll(canceled: true);
-    if (index > widget.itemCount - 1) {
-      index = widget.itemCount - 1;
-    }
+    index = _clampIndex(index);
     setState(() {
       primary.scrollController.jumpTo(0);
       primary.target = index;
@@ -505,9 +528,7 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
     Curve curve = Curves.linear,
     required List<double> opacityAnimationWeights,
   }) async {
-    if (index > widget.itemCount - 1) {
-      index = widget.itemCount - 1;
-    }
+    index = _clampIndex(index);
     if (_isTransitioning) {
       final scrollCompleter = Completer<void>();
       _stopScroll(canceled: true);
@@ -629,6 +650,11 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
           final temp = primary;
           primary = secondary;
           secondary = temp;
+          // Re-baseline so the next reported delta is relative to the new
+          // primary's offset, not the old one's.
+          if (primary.scrollController.hasClients) {
+            previousOffset = primary.scrollController.offset;
+          }
         }
         _isTransitioning = false;
         opacity.parent = const AlwaysStoppedAnimation<double>(0);
@@ -656,13 +682,16 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
   }
 
   void _updatePositions() {
+    // Materialize once: a lazy `where` would be re-filtered by every consumer
+    // (and every listener) that iterates the reported positions.
     final itemPositions = primary.itemPositionsNotifier.itemPositions.value
         .where(
           (ItemPosition position) =>
               position.itemLeadingEdge < 1 && position.itemTrailingEdge > 0,
-        );
+        )
+        .toList(growable: false);
     if (itemPositions.isNotEmpty) {
-      PageStorage.of(context).writeState(
+      PageStorage.maybeOf(context)?.writeState(
         context,
         itemPositions.reduce(
           (value, element) =>
