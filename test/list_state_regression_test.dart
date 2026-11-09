@@ -152,7 +152,7 @@ void main() {
 
       expect(find.text('Item 100'), findsOneWidget);
       expect(deltas, isEmpty);
-    }, skip: _task3Skip);
+    });
   });
 
   group('Task 4: long scroll direction follows what is on screen', () {
@@ -554,8 +554,3 @@ class _CountingBucket extends PageStorageBucket {
     super.writeState(context, data, identifier: identifier);
   }
 }
-
-/// Task 3 is NEEDS OWNER DECISION: the fix lives in
-/// `.agents/tasks/task-3-jumpto-delta.patch` and isn't applied yet. Set this to
-/// `false` once the owner approves and the patch is applied.
-const _task3Skip = true;

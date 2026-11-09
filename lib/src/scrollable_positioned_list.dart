@@ -342,6 +342,9 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
 
   double previousOffset = 0;
 
+  /// True while [_jumpTo] resets the primary controller to offset 0.
+  bool _isReanchoring = false;
+
   @override
   void initState() {
     super.initState();
@@ -384,6 +387,7 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
     final currentOffset = source.offset;
     final offsetChange = currentOffset - previousOffset;
     previousOffset = currentOffset;
+    if (_isReanchoring) return;
     if (!_isTransitioning ||
         (widget.scrollOffsetNotifier?.recordProgrammaticScrolls ?? false)) {
       widget.scrollOffsetNotifier?.changeController.add(offsetChange);
@@ -537,7 +541,11 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
     _stopScroll(canceled: true);
     index = _clampIndex(index);
     setState(() {
+      // Re-anchoring to offset 0 doesn't move anything on screen, so don't
+      // report it as a scroll; _onScroll still re-baselines previousOffset.
+      _isReanchoring = true;
       primary.scrollController.jumpTo(0);
+      _isReanchoring = false;
       primary.target = index;
       primary.alignment = alignment;
     });
