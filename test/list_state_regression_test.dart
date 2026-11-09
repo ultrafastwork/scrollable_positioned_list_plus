@@ -199,6 +199,31 @@ void main() {
       expect(firstVisibleIndex(itemPositionsListener), 100);
     });
   });
+
+  group('Task 6: unattached controllers fail with a descriptive assert', () {
+    final notAttached = isA<AssertionError>().having(
+      (error) => error.message,
+      'message',
+      contains('is not attached to a ScrollablePositionedList'),
+    );
+
+    test('ItemScrollController.jumpTo', () {
+      expect(
+        () => ItemScrollController().jumpTo(index: 0),
+        throwsA(notAttached),
+      );
+    });
+
+    test('ScrollOffsetController.animateScroll', () async {
+      await expectLater(
+        ScrollOffsetController().animateScroll(
+          offset: 10,
+          duration: scrollDuration,
+        ),
+        throwsA(notAttached),
+      );
+    });
+  });
 }
 
 /// Task 3 is NEEDS OWNER DECISION: the fix lives in

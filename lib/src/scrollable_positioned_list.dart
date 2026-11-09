@@ -212,6 +212,10 @@ class ItemScrollController {
   /// * 1 aligns the left edge of the item with the right edge of the view.
   /// * 0.5 aligns the left edge of the item with the center of the view.
   void jumpTo({required int index, double alignment = 0}) {
+    assert(
+      _scrollableListState != null,
+      'ItemScrollController is not attached to a ScrollablePositionedList',
+    );
     _scrollableListState!._jumpTo(index: index, alignment: alignment);
   }
 
@@ -280,6 +284,10 @@ class ScrollOffsetController {
     required Duration duration,
     Curve curve = Curves.linear,
   }) async {
+    assert(
+      _scrollableListState != null,
+      'ScrollOffsetController is not attached to a ScrollablePositionedList',
+    );
     final currentPosition =
         _scrollableListState!.primary.scrollController.offset;
     final newPosition = currentPosition + offset;
