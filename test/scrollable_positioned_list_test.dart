@@ -2608,6 +2608,89 @@ void main() {
       );
     },
   );
+
+  testWidgets('A long scrollTo does not rebuild items already built', (
+    WidgetTester tester,
+  ) async {
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = const Size(screenWidth, screenHeight);
+    addTearDown(tester.view.reset);
+    final itemScrollController = ItemScrollController();
+    final builds = <int, int>{};
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ScrollablePositionedList.builder(
+          itemCount: defaultItemCount,
+          itemScrollController: itemScrollController,
+          itemBuilder: (context, index) {
+            builds[index] = (builds[index] ?? 0) + 1;
+            return SizedBox(height: itemHeight, child: Text('Item $index'));
+          },
+        ),
+      ),
+    );
+    expect(builds[0], 1);
+
+    unawaited(
+      itemScrollController.scrollTo(index: 100, duration: scrollDuration),
+    );
+    await tester.pump();
+    // Starting the transition mounts the secondary list; the primary's items
+    // stay as they are.
+    expect(builds[0], 1);
+    expect(builds[100], 1);
+
+    await tester.pump();
+    await tester.pump(scrollDuration + scrollDurationTolerance);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Item 100'), findsOneWidget);
+    // The secondary became the primary without rebuilding its items.
+    expect(builds[100], 1);
+  });
+
+  testWidgets('A new itemBuilder is used after a long scrollTo', (
+    WidgetTester tester,
+  ) async {
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = const Size(screenWidth, screenHeight);
+    addTearDown(tester.view.reset);
+    final itemScrollController = ItemScrollController();
+    var label = 'Item';
+    late StateSetter setLabel;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (context, setState) {
+            setLabel = setState;
+            final currentLabel = label;
+            return ScrollablePositionedList.builder(
+              itemCount: defaultItemCount,
+              itemScrollController: itemScrollController,
+              itemBuilder: (context, index) => SizedBox(
+                height: itemHeight,
+                child: Text('$currentLabel $index'),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+
+    unawaited(
+      itemScrollController.scrollTo(index: 100, duration: scrollDuration),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Item 100'), findsOneWidget);
+
+    setLabel(() => label = 'New');
+    await tester.pump();
+
+    expect(find.text('Item 100'), findsNothing);
+    expect(find.text('New 100'), findsOneWidget);
+  });
 }
 
 bool collectSemanticNodes(SemanticsNode root, List<SemanticsNode> nodes) {

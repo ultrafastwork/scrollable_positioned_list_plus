@@ -464,6 +464,10 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
       });
     }
 
+    // The new widget may carry a new item builder, item count, etc.
+    primary.list = null;
+    secondary.list = null;
+
     // No setState needed: build always runs after didUpdateWidget.
     if (widget.itemCount == 0) {
       primary.target = 0;
@@ -517,28 +521,49 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
       opacity: opacity,
       child: NotificationListener<ScrollNotification>(
         onNotification: onNotification,
-        child: PositionedList(
-          itemBuilder: widget.itemBuilder,
-          separatorBuilder: widget.separatorBuilder,
-          itemCount: widget.itemCount,
-          positionedIndex: details.target,
-          controller: details.scrollController,
-          itemPositionsNotifier: details.itemPositionsNotifier,
-          scrollDirection: widget.scrollDirection,
-          reverse: widget.reverse,
-          cacheExtent: cacheExtent,
-          alignment: details.alignment,
-          physics: widget.physics,
-          shrinkWrap: widget.shrinkWrap,
-          addSemanticIndexes: widget.addSemanticIndexes,
-          semanticChildCount: widget.semanticChildCount,
-          padding: widget.padding,
-          addAutomaticKeepAlives: widget.addAutomaticKeepAlives,
-          addRepaintBoundaries: widget.addRepaintBoundaries,
-        ),
+        child: _positionedList(details, cacheExtent),
       ),
     ),
   );
+
+  /// The [PositionedList] for [details], reused while nothing it depends on
+  /// has changed.
+  ///
+  /// Starting and ending a long-distance scroll rebuild this widget. Handing
+  /// back the same instance lets the framework skip the list's subtree, so the
+  /// items already built aren't built again in those (already expensive)
+  /// frames.
+  PositionedList _positionedList(
+    _ListDisplayDetails details,
+    double cacheExtent,
+  ) {
+    final cached = details.list;
+    if (cached != null &&
+        cached.positionedIndex == details.target &&
+        cached.alignment == details.alignment &&
+        cached.cacheExtent == cacheExtent) {
+      return cached;
+    }
+    return details.list = PositionedList(
+      itemBuilder: widget.itemBuilder,
+      separatorBuilder: widget.separatorBuilder,
+      itemCount: widget.itemCount,
+      positionedIndex: details.target,
+      controller: details.scrollController,
+      itemPositionsNotifier: details.itemPositionsNotifier,
+      scrollDirection: widget.scrollDirection,
+      reverse: widget.reverse,
+      cacheExtent: cacheExtent,
+      alignment: details.alignment,
+      physics: widget.physics,
+      shrinkWrap: widget.shrinkWrap,
+      addSemanticIndexes: widget.addSemanticIndexes,
+      semanticChildCount: widget.semanticChildCount,
+      padding: widget.padding,
+      addAutomaticKeepAlives: widget.addAutomaticKeepAlives,
+      addRepaintBoundaries: widget.addRepaintBoundaries,
+    );
+  }
 
   double _cacheExtent(BoxConstraints constraints) => max(
     (widget.scrollDirection == Axis.vertical
@@ -666,13 +691,19 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
           opacity.parent = _opacityAnimation(
             opacityAnimationWeights,
           ).animate(animationController);
-          secondary.scrollController.jumpTo(
-            -direction *
-                (_screenScrollCount *
-                        primary.scrollController.position.viewportDimension -
-                    alignment *
-                        secondary.scrollController.position.viewportDimension),
-          );
+          // Normally a no-op: the secondary was mounted at this offset.
+          secondary.scrollController
+            ..nextInitialOffset = 0
+            ..jumpTo(
+              -direction *
+                  (_screenScrollCount *
+                          primary.scrollController.position.viewportDimension -
+                      alignment *
+                          secondary
+                              .scrollController
+                              .position
+                              .viewportDimension),
+            );
 
           startCompleter.complete(
             primary.scrollController.animateTo(
@@ -690,6 +721,14 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
           );
         });
       };
+      // Mount the secondary where its animation starts, so the frame after
+      // the mount doesn't have to lay out two more screens of it. The
+      // secondary has the same constraints as the primary, so it has the same
+      // viewport dimension.
+      secondary.scrollController.nextInitialOffset =
+          -direction *
+          (scrollAmount -
+              alignment * primary.scrollController.position.viewportDimension);
       setState(() {
         // _startScroll can be re-entrant (two scrollTo calls while
         // transitioning), so `assert(!_isTransitioning)` doesn't hold here.
@@ -805,7 +844,7 @@ class _ListDisplayDetails {
   _ListDisplayDetails(this.key);
 
   final itemPositionsNotifier = ItemPositionsNotifier();
-  final scrollController = ScrollController(keepScrollOffset: false);
+  final scrollController = _ListScrollController();
 
   /// The index of the item to scroll to.
   int target = 0;
@@ -815,5 +854,24 @@ class _ListDisplayDetails {
   /// See [ItemScrollController.jumpTo] for an explanation of alignment.
   double alignment = 0;
 
+  /// The last [PositionedList] built for this list. Cleared whenever the
+  /// [ScrollablePositionedList] widget changes.
+  PositionedList? list;
+
   final Key key;
+}
+
+/// A [ScrollController] whose next position starts at [nextInitialOffset].
+///
+/// The secondary list is mounted for each long-distance scroll. Mounting it
+/// straight at the offset its animation starts from, instead of at 0 and then
+/// jumping, saves a frame that builds about two screens of new items.
+class _ListScrollController extends ScrollController {
+  _ListScrollController() : super(keepScrollOffset: false);
+
+  /// The offset a newly attached position starts at.
+  double nextInitialOffset = 0;
+
+  @override
+  double get initialScrollOffset => nextInitialOffset;
 }

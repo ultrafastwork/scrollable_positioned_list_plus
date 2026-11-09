@@ -7,7 +7,7 @@ This file is the index. Each task has its own file in this directory with the fu
 
 ## Ground rules for every task
 
-- **Don't break existing behaviour.** On the task 23 commit, `flutter test` gives 206 passed and 0 skipped (204 on `a0ee16b`). That must still hold after your change (plus any tests you add), and `flutter analyze` must report no issues. For tasks 1–10 the baseline was `598e545` (182 passed, 2 skipped).
+- **Don't break existing behaviour.** On the task 21 commit, `flutter test` gives 208 passed and 0 skipped (206 on the task 23 commit, 204 on `a0ee16b`). That must still hold after your change (plus any tests you add), and `flutter analyze` must report no issues. For tasks 1–10 the baseline was `598e545` (182 passed, 2 skipped).
 - **Prove the bug first.** For a correctness task, add a regression test that fails before your fix and passes with it. Check this by stashing `lib/`, running the test, then restoring.
 - **Prove the gain.** For a performance task, record before/after numbers in the task file, from the [task 22](22-device-profiling-harness.md) device harness if a device is available, otherwise from `flutter test benchmark/scroll_benchmark_test.dart` (relative numbers only). If there's no measurable gain, don't merge: record the numbers and close the task as "not worth it".
 - **Ask before changing public behaviour.** If a task is marked **NEEDS OWNER DECISION**, don't change observable behaviour or add public API without the owner's approval. Implement it behind the approved option only, and add a changelog entry.
@@ -16,16 +16,15 @@ This file is the index. Each task has its own file in this directory with the fu
 
 ## Open tasks
 
-Recommended order: **18 → 20 → 21.** (19, 22 and 23 are done. 18 and 20 are blocked on owner decisions, so 21 is the next one that can be picked up.)
+Recommended order: **18 → 20.** (19, 21, 22 and 23 are done. Both remaining tasks are blocked on owner decisions, so nothing can be picked up until the owner answers one of them.)
 
 | # | Task | Area | Status |
 |---|------|------|--------|
 | 18 | [Shrink the default cache extent](18-default-cache-extent.md) — NEEDS OWNER DECISION | performance | blocked on owner decision (measured: about 25 % less build time while dragging, long-scroll jank frame halved; recommendation in the file) |
 | 20 | [Fixed-extent mode (`itemExtent` / `prototypeItem`)](20-fixed-extent-mode.md) — NEEDS OWNER DECISION | performance, new API | blocked on owner decision (prototype measured: direct `scrollTo` beats the crossfade up to about 10 screens, no gain while dragging; recommendation in the file) |
-| 21 | [Reduce the cost of the long-scroll crossfade](21-transition-cost.md) (low priority) | performance | not started |
 
 **File conflicts:**
-- Tasks 18, 20 and 21 all edit `lib/src/scrollable_positioned_list.dart`, and 20 also edits `lib/src/positioned_list.dart`. Give them to one agent or do them one after another.
+- Tasks 18 and 20 both edit `lib/src/scrollable_positioned_list.dart`, and 20 also edits `lib/src/positioned_list.dart`. Give them to one agent or do them one after another. Task 21 changed `_buildList` (it now goes through `_positionedList`, which caches the `PositionedList` widget) and the transition branch of `_startScroll`. Task 18's cache extent and task 20's `itemExtent` must go through `_positionedList`'s cache check, or be cleared in `didUpdateWidget`, or a change won't reach the list.
 - Task 20 should also add `itemExtent` scenarios to `example/integration_test/perf_test.dart` (scenario 6 of task 22).
 
 **Running the device harness (task 22):** connect a real Android or iOS device (`fvm flutter devices`), then from `example/` run:
@@ -69,6 +68,7 @@ fvm flutter drive --profile --no-dds --driver=test_driver/perf_driver.dart --tar
 | 10 | [Remove dead state in the shrink-wrap viewport](10-shrink-wrap-dead-state.md) | done |
 | 13 | [Position comparison is order-sensitive](13-order-sensitive-position-comparison.md) | done, superseded by `22d1e85` |
 | 19 | [Compute item positions only when needed, and more cheaply](19-lazy-position-computation.md) | closed, not worth it (no measurable device gain; patch kept; the bug it surfaced is [task 23](23-new-listener-stays-empty.md)) |
+| 21 | [Reduce the cost of the long-scroll crossfade](21-transition-cost.md) | done (about a third fewer dropped vsyncs per long `scrollTo`, worst frame about 15–20 % lower; smaller secondary cache measured and rejected) |
 
 ### Tooling
 
