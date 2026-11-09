@@ -9,7 +9,7 @@ Flutter package; all source is in `lib/src/`, tests in `test/`.
 - **Prove the bug first.** For a correctness task, add a regression test that fails on `598e545` and passes with your fix. Check this by stashing `lib/`, running the test, then restoring.
 - **Ask before changing public behaviour.** If a task is marked **NEEDS OWNER DECISION**, don't change observable behaviour without the owner's approval. Implement it behind the approved option only.
 - **Keep commits small.** Make one commit per task, and don't touch unrelated code.
-- **Watch for file conflicts.** Tasks 2, 3, 4, 6, 8 and 9 all edit `lib/src/scrollable_positioned_list.dart`, so give them to one agent or do them one after another. Tasks 8 and 9 both change position reporting, so do 8 first. Tasks 1, 5, 7 and 10 each touch a different file and can run in parallel.
+- **Watch for file conflicts.** Tasks 2, 3, 4, 6, 8 and 9 all edit `lib/src/scrollable_positioned_list.dart`, so give them to one agent or do them one after another. Tasks 8 and 9 both change position reporting, so do 8 first. Tasks 7 and 10 both edit `lib/src/wrapping.dart`, so pair them too. Task 1, task 5 and the 7+10 pair touch different files from each other and from the group above, so they can run in parallel.
 - **Line numbers** are for `598e545`.
 
 ## Already fixed in 598e545 (don't redo)
