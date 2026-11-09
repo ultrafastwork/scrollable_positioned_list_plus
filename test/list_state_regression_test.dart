@@ -305,6 +305,57 @@ void main() {
       );
     });
   });
+
+  group('Task 9: secondary-list frames do not redo position work', () {
+    testWidgets('at most one position update per frame while transitioning', (
+      tester,
+    ) async {
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(screenWidth, screenHeight);
+      addTearDown(tester.view.reset);
+      final itemScrollController = ItemScrollController();
+      final bucket = _CountingBucket();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PageStorage(
+            bucket: bucket,
+            child: ScrollablePositionedList.builder(
+              itemCount: defaultItemCount,
+              itemScrollController: itemScrollController,
+              itemBuilder: (context, index) =>
+                  SizedBox(height: itemHeight, child: Text('Item $index')),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      unawaited(
+        itemScrollController.scrollTo(index: 300, duration: scrollDuration),
+      );
+      bucket.writes = 0;
+      const frame = Duration(milliseconds: 16);
+      var frames = 0;
+      for (; frames * 16 < 1200; frames++) {
+        await tester.pump(frame);
+      }
+      await tester.pumpAndSettle();
+
+      // One write per frame from the primary list, plus one after the swap.
+      expect(bucket.writes, lessThanOrEqualTo(frames + 1));
+      expect(find.text('Item 300'), findsOneWidget);
+    });
+  });
+}
+
+class _CountingBucket extends PageStorageBucket {
+  int writes = 0;
+
+  @override
+  void writeState(BuildContext context, dynamic data, {Object? identifier}) {
+    writes++;
+    super.writeState(context, data, identifier: identifier);
+  }
 }
 
 /// Task 3 is NEEDS OWNER DECISION: the fix lives in

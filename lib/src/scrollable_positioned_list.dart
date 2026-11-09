@@ -356,8 +356,16 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
     }
     widget.itemScrollController?._attach(this);
     widget.scrollOffsetController?._attach(this);
-    primary.itemPositionsNotifier.itemPositions.addListener(_updatePositions);
-    secondary.itemPositionsNotifier.itemPositions.addListener(_updatePositions);
+    // Only the current primary's positions are reported, so ignore updates
+    // from the other list (the hidden secondary while transitioning).
+    final ping = primary;
+    final pong = secondary;
+    ping.itemPositionsNotifier.itemPositions.addListener(() {
+      if (identical(ping, primary)) _updatePositions();
+    });
+    pong.itemPositionsNotifier.itemPositions.addListener(() {
+      if (identical(pong, primary)) _updatePositions();
+    });
     // Listen on both controllers: [primary] and [secondary] swap roles after a
     // long-distance scroll, and offset changes must keep being reported from
     // whichever one is currently primary.
@@ -399,12 +407,8 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
 
   @override
   void dispose() {
-    primary.itemPositionsNotifier.itemPositions.removeListener(
-      _updatePositions,
-    );
-    secondary.itemPositionsNotifier.itemPositions.removeListener(
-      _updatePositions,
-    );
+    // The position listeners added in initState go away with the notifiers,
+    // which are disposed below.
     _animationController?.dispose();
     for (final details in [primary, secondary]) {
       details.scrollController.dispose();

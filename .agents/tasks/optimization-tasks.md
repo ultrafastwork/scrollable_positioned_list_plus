@@ -75,6 +75,7 @@ The scroll-offset listener now survives the list swap. `ScrollOffsetController` 
 - **Acceptance:** a test where the parent rebuilds with identical props and the user's `itemPositions` listener isn't called. All existing position tests pass.
 
 ### 9. Skip redundant `_updatePositions` work for the hidden secondary list
+**Status:** done in agent/list-state — one position listener per `_ListDisplayDetails` that only calls `_updatePositions` when its list is the current primary (128 → ≤ 77 updates over a 76-frame transition); the post-swap explicit call was added in task 8.
 - **File:** `lib/src/scrollable_positioned_list.dart`: `_updatePositions` listens to both the primary and secondary internal notifiers.
 - **Problem:** while transitioning, every secondary-list frame re-filters the primary's positions, rewrites `PageStorage` and re-notifies the user, even though primary positions didn't change in that callback.
 - **Fix direction:** register separate listeners per `_ListDisplayDetails`, as was done for scroll controllers in `598e545`. Only recompute when the source notifier belongs to the current `primary`. After the swap in `_stopScroll`, call `_updatePositions()` once explicitly so the user immediately sees the new primary's positions.
