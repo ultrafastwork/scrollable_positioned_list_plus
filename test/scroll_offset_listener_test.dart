@@ -50,8 +50,9 @@ void main() {
           itemBuilder: (context, index) {
             assert(index >= 0 && index <= itemCount - 1);
             return SizedBox(
-              height:
-                  variableHeight ? (itemHeight + (index % 13) * 5) : itemHeight,
+              height: variableHeight
+                  ? (itemHeight + (index % 13) * 5)
+                  : itemHeight,
               child: Text('Item $index'),
             );
           },
@@ -71,148 +72,183 @@ void main() {
   }
 
   testWidgets('Manual scroll up 10 pixels', (WidgetTester tester) async {
-    final scrollDistance = 50.0;
+    const scrollDistance = 50.0;
 
     final itemScrollController = ItemScrollController();
     final itemPositionsListener = ItemPositionsListener.create();
     final ScrollSum scrollSummer = ScrollSum();
 
-    await setUpWidgetTest(tester,
-        itemScrollController: itemScrollController,
-        itemPositionsListener: itemPositionsListener,
-        scrollOffsetListener: scrollSummer.scrollOffsetListener,
-        initialIndex: 5);
+    await setUpWidgetTest(
+      tester,
+      itemScrollController: itemScrollController,
+      itemPositionsListener: itemPositionsListener,
+      scrollOffsetListener: scrollSummer.scrollOffsetListener,
+      initialIndex: 5,
+    );
 
     expect(
-        itemPositionsListener.itemPositions.value
-            .firstWhere((position) => position.index == 5)
-            .itemLeadingEdge,
-        0);
+      itemPositionsListener.itemPositions.value
+          .firstWhere((position) => position.index == 5)
+          .itemLeadingEdge,
+      0,
+    );
 
     await tester.drag(
-        find.byType(ScrollablePositionedList), Offset(0, -scrollDistance));
+      find.byType(ScrollablePositionedList),
+      const Offset(0, -scrollDistance),
+    );
     await tester.pumpAndSettle();
 
     expect(scrollSummer.totalScroll, scrollDistance);
   });
 
   testWidgets('Manual scroll left 10 pixels', (WidgetTester tester) async {
-    final scrollDistance = 50.0;
+    const scrollDistance = 50.0;
 
     final itemScrollController = ItemScrollController();
     final itemPositionsListener = ItemPositionsListener.create();
     final ScrollSum scrollSummer = ScrollSum();
 
-    await setUpWidgetTest(tester,
-        itemScrollController: itemScrollController,
-        itemPositionsListener: itemPositionsListener,
-        scrollOffsetListener: scrollSummer.scrollOffsetListener,
-        scrollDirection: Axis.horizontal,
-        initialIndex: 5);
+    await setUpWidgetTest(
+      tester,
+      itemScrollController: itemScrollController,
+      itemPositionsListener: itemPositionsListener,
+      scrollOffsetListener: scrollSummer.scrollOffsetListener,
+      scrollDirection: Axis.horizontal,
+      initialIndex: 5,
+    );
 
     expect(
-        itemPositionsListener.itemPositions.value
-            .firstWhere((position) => position.index == 5)
-            .itemLeadingEdge,
-        0);
+      itemPositionsListener.itemPositions.value
+          .firstWhere((position) => position.index == 5)
+          .itemLeadingEdge,
+      0,
+    );
 
     await tester.drag(
-        find.byType(ScrollablePositionedList), Offset(-scrollDistance, 0));
+      find.byType(ScrollablePositionedList),
+      const Offset(-scrollDistance, 0),
+    );
     await tester.pumpAndSettle();
 
     expect(scrollSummer.totalScroll, scrollDistance);
   });
 
-  testWidgets('Programmatic scroll to item 100 with programmatic recording on',
-      (WidgetTester tester) async {
-    final itemScrollController = ItemScrollController();
-    final itemPositionsListener = ItemPositionsListener.create();
-    final ScrollSum scrollSummer = ScrollSum();
+  testWidgets(
+    'Programmatic scroll to item 100 with programmatic recording on',
+    (WidgetTester tester) async {
+      final itemScrollController = ItemScrollController();
+      final itemPositionsListener = ItemPositionsListener.create();
+      final ScrollSum scrollSummer = ScrollSum();
 
-    await setUpWidgetTest(tester,
+      await setUpWidgetTest(
+        tester,
         itemScrollController: itemScrollController,
         itemPositionsListener: itemPositionsListener,
         scrollOffsetListener: scrollSummer.scrollOffsetListener,
         scrollDirection: Axis.horizontal,
-        initialIndex: 5);
+        initialIndex: 5,
+      );
 
-    unawaited(
-        itemScrollController.scrollTo(index: 100, duration: scrollDuration));
+      unawaited(
+        itemScrollController.scrollTo(index: 100, duration: scrollDuration),
+      );
 
-    await tester.pumpAndSettle();
+      await tester.pumpAndSettle();
 
-    expect(scrollSummer.totalScroll, 2 * screenHeight);
-  });
+      expect(scrollSummer.totalScroll, 2 * screenHeight);
+    },
+  );
 
-  testWidgets('Programmatic scroll to item 100 with programmatic recording off',
-      (WidgetTester tester) async {
-    final itemScrollController = ItemScrollController();
-    final itemPositionsListener = ItemPositionsListener.create();
-    final ScrollSum scrollSummer = ScrollSum(recordProgrammaticScrolls: false);
+  testWidgets(
+    'Programmatic scroll to item 100 with programmatic recording off',
+    (WidgetTester tester) async {
+      final itemScrollController = ItemScrollController();
+      final itemPositionsListener = ItemPositionsListener.create();
+      final ScrollSum scrollSummer = ScrollSum(
+        recordProgrammaticScrolls: false,
+      );
 
-    await setUpWidgetTest(tester,
+      await setUpWidgetTest(
+        tester,
         itemScrollController: itemScrollController,
         itemPositionsListener: itemPositionsListener,
         scrollOffsetListener: scrollSummer.scrollOffsetListener,
         scrollDirection: Axis.horizontal,
-        initialIndex: 5);
+        initialIndex: 5,
+      );
 
-    unawaited(
-        itemScrollController.scrollTo(index: 100, duration: scrollDuration));
+      unawaited(
+        itemScrollController.scrollTo(index: 100, duration: scrollDuration),
+      );
 
-    await tester.pumpAndSettle();
+      await tester.pumpAndSettle();
 
-    expect(scrollSummer.totalScroll, 0);
-  });
+      expect(scrollSummer.totalScroll, 0);
+    },
+  );
 
-  testWidgets('Manual scroll is still reported after a long programmatic scroll',
-      (WidgetTester tester) async {
-    final scrollDistance = 50.0;
+  testWidgets(
+    'Manual scroll is still reported after a long programmatic scroll',
+    (WidgetTester tester) async {
+      const scrollDistance = 50.0;
 
-    final itemScrollController = ItemScrollController();
-    final ScrollSum scrollSummer = ScrollSum();
+      final itemScrollController = ItemScrollController();
+      final ScrollSum scrollSummer = ScrollSum();
 
-    await setUpWidgetTest(tester,
+      await setUpWidgetTest(
+        tester,
         itemScrollController: itemScrollController,
         scrollOffsetListener: scrollSummer.scrollOffsetListener,
-        initialIndex: 5);
+        initialIndex: 5,
+      );
 
-    // Far enough to use the two-list transition, which swaps primary and
-    // secondary lists when it finishes.
-    unawaited(
-        itemScrollController.scrollTo(index: 100, duration: scrollDuration));
-    await tester.pumpAndSettle();
-    expect(scrollSummer.totalScroll, 2 * screenHeight);
+      // Far enough to use the two-list transition, which swaps primary and
+      // secondary lists when it finishes.
+      unawaited(
+        itemScrollController.scrollTo(index: 100, duration: scrollDuration),
+      );
+      await tester.pumpAndSettle();
+      expect(scrollSummer.totalScroll, 2 * screenHeight);
 
-    await tester.drag(
-        find.byType(ScrollablePositionedList), Offset(0, -scrollDistance));
-    await tester.pumpAndSettle();
+      await tester.drag(
+        find.byType(ScrollablePositionedList),
+        const Offset(0, -scrollDistance),
+      );
+      await tester.pumpAndSettle();
 
-    expect(scrollSummer.totalScroll, 2 * screenHeight + scrollDistance);
-  });
+      expect(scrollSummer.totalScroll, 2 * screenHeight + scrollDistance);
+    },
+  );
 
-  testWidgets('Manual scroll up 10 pixels with programmatic recording off',
-      (WidgetTester tester) async {
-    final scrollDistance = 50.0;
+  testWidgets('Manual scroll up 10 pixels with programmatic recording off', (
+    WidgetTester tester,
+  ) async {
+    const scrollDistance = 50.0;
 
     final itemScrollController = ItemScrollController();
     final itemPositionsListener = ItemPositionsListener.create();
     final ScrollSum scrollSummer = ScrollSum(recordProgrammaticScrolls: false);
 
-    await setUpWidgetTest(tester,
-        itemScrollController: itemScrollController,
-        itemPositionsListener: itemPositionsListener,
-        scrollOffsetListener: scrollSummer.scrollOffsetListener,
-        initialIndex: 5);
+    await setUpWidgetTest(
+      tester,
+      itemScrollController: itemScrollController,
+      itemPositionsListener: itemPositionsListener,
+      scrollOffsetListener: scrollSummer.scrollOffsetListener,
+      initialIndex: 5,
+    );
 
     expect(
-        itemPositionsListener.itemPositions.value
-            .firstWhere((position) => position.index == 5)
-            .itemLeadingEdge,
-        0);
+      itemPositionsListener.itemPositions.value
+          .firstWhere((position) => position.index == 5)
+          .itemLeadingEdge,
+      0,
+    );
 
     await tester.drag(
-        find.byType(ScrollablePositionedList), Offset(0, -scrollDistance));
+      find.byType(ScrollablePositionedList),
+      const Offset(0, -scrollDistance),
+    );
     await tester.pumpAndSettle();
 
     expect(scrollSummer.totalScroll, scrollDistance);
@@ -225,8 +261,9 @@ class ScrollSum {
   final ScrollOffsetListener scrollOffsetListener;
 
   ScrollSum({this.recordProgrammaticScrolls = true})
-      : scrollOffsetListener = ScrollOffsetListener.create(
-            recordProgrammaticScrolls: recordProgrammaticScrolls) {
+    : scrollOffsetListener = ScrollOffsetListener.create(
+        recordProgrammaticScrolls: recordProgrammaticScrolls,
+      ) {
     scrollOffsetListener.changes.listen((event) {
       totalScroll += event;
     });

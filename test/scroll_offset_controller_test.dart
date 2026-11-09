@@ -52,8 +52,9 @@ void main() {
           itemBuilder: (context, index) {
             assert(index >= 0 && index <= itemCount - 1);
             return SizedBox(
-              height:
-                  variableHeight ? (itemHeight + (index % 13) * 5) : itemHeight,
+              height: variableHeight
+                  ? (itemHeight + (index % 13) * 5)
+                  : itemHeight,
               child: Text('Item $index'),
             );
           },
@@ -72,11 +73,13 @@ void main() {
     );
   }
 
-  testWidgets('Programtically scroll down 50 pixels',
-      (WidgetTester tester) async {
-    final scrollDistance = 50.0;
+  testWidgets('Programtically scroll down 50 pixels', (
+    WidgetTester tester,
+  ) async {
+    const scrollDistance = 50.0;
 
-    ScrollOffsetController scrollOffsetController = ScrollOffsetController();
+    final ScrollOffsetController scrollOffsetController =
+        ScrollOffsetController();
 
     await setUpWidgetTest(
       tester,
@@ -86,10 +89,12 @@ void main() {
 
     final originalOffest = tester.getTopLeft(find.text('Item 5')).dy;
 
-    unawaited(scrollOffsetController.animateScroll(
-      offset: -scrollDistance,
-      duration: scrollDuration,
-    ));
+    unawaited(
+      scrollOffsetController.animateScroll(
+        offset: -scrollDistance,
+        duration: scrollDuration,
+      ),
+    );
     await tester.pumpAndSettle();
 
     final newOffset = tester.getTopLeft(find.text('Item 5')).dy;
@@ -97,11 +102,13 @@ void main() {
     expect(newOffset - originalOffest, scrollDistance);
   });
 
-  testWidgets('Programtically scroll left 50 pixels',
-      (WidgetTester tester) async {
-    final scrollDistance = 50.0;
+  testWidgets('Programtically scroll left 50 pixels', (
+    WidgetTester tester,
+  ) async {
+    const scrollDistance = 50.0;
 
-    ScrollOffsetController scrollOffsetController = ScrollOffsetController();
+    final ScrollOffsetController scrollOffsetController =
+        ScrollOffsetController();
 
     await setUpWidgetTest(
       tester,
@@ -112,10 +119,12 @@ void main() {
 
     final originalOffest = tester.getTopLeft(find.text('Item 5')).dx;
 
-    unawaited(scrollOffsetController.animateScroll(
-      offset: -scrollDistance,
-      duration: scrollDuration,
-    ));
+    unawaited(
+      scrollOffsetController.animateScroll(
+        offset: -scrollDistance,
+        duration: scrollDuration,
+      ),
+    );
     await tester.pumpAndSettle();
 
     final newOffset = tester.getTopLeft(find.text('Item 5')).dx;
@@ -123,11 +132,13 @@ void main() {
     expect(newOffset - originalOffest, scrollDistance);
   });
 
-  testWidgets('Programtically scroll down 50 pixels, stop half way',
-      (WidgetTester tester) async {
-    final scrollDistance = 50.0;
+  testWidgets('Programtically scroll down 50 pixels, stop half way', (
+    WidgetTester tester,
+  ) async {
+    const scrollDistance = 50.0;
 
-    ScrollOffsetController scrollOffsetController = ScrollOffsetController();
+    final ScrollOffsetController scrollOffsetController =
+        ScrollOffsetController();
 
     await setUpWidgetTest(
       tester,
@@ -137,10 +148,12 @@ void main() {
 
     final originalOffest = tester.getTopLeft(find.text('Item 5')).dy;
 
-    unawaited(scrollOffsetController.animateScroll(
-      offset: -scrollDistance,
-      duration: scrollDuration,
-    ));
+    unawaited(
+      scrollOffsetController.animateScroll(
+        offset: -scrollDistance,
+        duration: scrollDuration,
+      ),
+    );
     await tester.pump();
     await tester.pump();
     await tester.pump(scrollDuration ~/ 2);
@@ -156,73 +169,82 @@ void main() {
   });
 
   testWidgets(
-      'Programtically scroll down 50 pixels, stop half way and go back 12',
-      (WidgetTester tester) async {
-    final scrollDistance = 50.0;
-    final scrollBack = 12.0;
+    'Programtically scroll down 50 pixels, stop half way and go back 12',
+    (WidgetTester tester) async {
+      const scrollDistance = 50.0;
+      const scrollBack = 12.0;
 
-    ScrollOffsetController scrollOffsetController = ScrollOffsetController();
+      final ScrollOffsetController scrollOffsetController =
+          ScrollOffsetController();
 
-    await setUpWidgetTest(
-      tester,
-      scrollOffsetController: scrollOffsetController,
-      initialIndex: 5,
-    );
+      await setUpWidgetTest(
+        tester,
+        scrollOffsetController: scrollOffsetController,
+        initialIndex: 5,
+      );
 
-    final originalOffest = tester.getTopLeft(find.text('Item 5')).dy;
+      final originalOffest = tester.getTopLeft(find.text('Item 5')).dy;
 
-    unawaited(scrollOffsetController.animateScroll(
-      offset: -scrollDistance,
-      duration: scrollDuration,
-    ));
-    await tester.pump();
-    await tester.pump();
-    await tester.pump(scrollDuration ~/ 2);
+      unawaited(
+        scrollOffsetController.animateScroll(
+          offset: -scrollDistance,
+          duration: scrollDuration,
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(scrollDuration ~/ 2);
 
-    unawaited(scrollOffsetController.animateScroll(
-      offset: scrollBack,
-      duration: scrollDuration,
-    ));
-    await tester.pumpAndSettle();
+      unawaited(
+        scrollOffsetController.animateScroll(
+          offset: scrollBack,
+          duration: scrollDuration,
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    final newOffset = tester.getTopLeft(find.text('Item 5')).dy;
+      final newOffset = tester.getTopLeft(find.text('Item 5')).dy;
 
-    expect(newOffset - originalOffest, (scrollDistance ~/ 2) - scrollBack);
+      expect(newOffset - originalOffest, (scrollDistance ~/ 2) - scrollBack);
 
-    await tester.pumpAndSettle();
-  });
+      await tester.pumpAndSettle();
+    },
+  );
 
   testWidgets(
-      'Programtically scroll down 50 pixels, stop half way and then programtically scroll to iten 100',
-      (WidgetTester tester) async {
-    final scrollDistance = 50.0;
+    'Programtically scroll down 50 pixels, stop half way and then programtically scroll to iten 100',
+    (WidgetTester tester) async {
+      const scrollDistance = 50.0;
 
-    ScrollOffsetController scrollOffsetController = ScrollOffsetController();
-    ItemScrollController itemScrollController = ItemScrollController();
+      final ScrollOffsetController scrollOffsetController =
+          ScrollOffsetController();
+      final ItemScrollController itemScrollController = ItemScrollController();
 
-    await setUpWidgetTest(
-      tester,
-      scrollOffsetController: scrollOffsetController,
-      itemScrollController: itemScrollController,
-      initialIndex: 5,
-    );
+      await setUpWidgetTest(
+        tester,
+        scrollOffsetController: scrollOffsetController,
+        itemScrollController: itemScrollController,
+        initialIndex: 5,
+      );
 
-    unawaited(scrollOffsetController.animateScroll(
-      offset: -scrollDistance,
-      duration: scrollDuration,
-    ));
-    await tester.pump();
-    await tester.pump();
-    await tester.pump(scrollDuration ~/ 2);
+      unawaited(
+        scrollOffsetController.animateScroll(
+          offset: -scrollDistance,
+          duration: scrollDuration,
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(scrollDuration ~/ 2);
 
-    unawaited(itemScrollController.scrollTo(
-      index: 100,
-      duration: scrollDuration,
-    ));
-    await tester.pumpAndSettle();
+      unawaited(
+        itemScrollController.scrollTo(index: 100, duration: scrollDuration),
+      );
+      await tester.pumpAndSettle();
 
-    expect(tester.getTopLeft(find.text('Item 100')).dy, 0);
+      expect(tester.getTopLeft(find.text('Item 100')).dy, 0);
 
-    await tester.pumpAndSettle();
-  });
+      await tester.pumpAndSettle();
+    },
+  );
 }

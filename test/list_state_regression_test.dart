@@ -386,7 +386,8 @@ void main() {
       await tester.pumpAndSettle();
       final positions = itemPositionsListener.itemPositions.value;
       expect(
-        positions.firstWhere((position) => position.index == 300)
+        positions
+            .firstWhere((position) => position.index == 300)
             .itemLeadingEdge,
         0,
       );
@@ -591,6 +592,31 @@ void main() {
 
       expect(itemPositionsListener.itemPositions.value.toSet(), before.toSet());
       expect(notifications, 0);
+    });
+
+    testWidgets('positions are reported in index order', (tester) async {
+      final itemPositionsListener = ItemPositionsListener.create();
+      await setUpWidgetTest(
+        tester,
+        itemPositionsListener: itemPositionsListener,
+      );
+      // Same out-of-order re-registration as above.
+      await tester.drag(
+        find.byType(ScrollablePositionedList),
+        const Offset(0, -45 * itemHeight),
+      );
+      await tester.pumpAndSettle();
+      await tester.drag(
+        find.byType(ScrollablePositionedList),
+        const Offset(0, 40 * itemHeight),
+      );
+      await tester.pumpAndSettle();
+
+      final indices = itemPositionsListener.itemPositions.value
+          .map((position) => position.index)
+          .toList();
+      expect(indices, isNotEmpty);
+      expect(indices, [...indices]..sort());
     });
   });
 }

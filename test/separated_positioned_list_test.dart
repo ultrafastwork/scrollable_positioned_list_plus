@@ -35,10 +35,8 @@ void main() {
           positionedIndex: topItem,
           alignment: anchor,
           controller: scrollController,
-          itemBuilder: (context, index) => SizedBox(
-            height: itemHeight,
-            child: Text('Item $index'),
-          ),
+          itemBuilder: (context, index) =>
+              SizedBox(height: itemHeight, child: Text('Item $index')),
           separatorBuilder: (context, index) => SizedBox(
             height: separatorHeight,
             child: Text('Separator $index'),
@@ -69,23 +67,28 @@ void main() {
     expect(find.text('Item 3'), findsNothing);
 
     expect(
-        itemPositionsNotifier.itemPositions.value
-            .firstWhere((position) => position.index == 0)
-            .itemLeadingEdge,
-        0);
+      itemPositionsNotifier.itemPositions.value
+          .firstWhere((position) => position.index == 0)
+          .itemLeadingEdge,
+      0,
+    );
     expect(
-        itemPositionsNotifier.itemPositions.value
-            .firstWhere((position) => position.index == 2)
-            .itemTrailingEdge,
-        _screenProportion(numberOfItems: 3, numberOfSeparators: 2));
+      itemPositionsNotifier.itemPositions.value
+          .firstWhere((position) => position.index == 2)
+          .itemTrailingEdge,
+      _screenProportion(numberOfItems: 3, numberOfSeparators: 2),
+    );
   });
 
-  testWidgets('Short list centered at 1 scrolled up',
-      (WidgetTester tester) async {
+  testWidgets('Short list centered at 1 scrolled up', (
+    WidgetTester tester,
+  ) async {
     await setUpWidgetTest(tester, itemCount: 3, topItem: 1);
 
     await tester.drag(
-        find.byType(PositionedList), const Offset(0, 2 * itemHeight));
+      find.byType(PositionedList),
+      const Offset(0, 2 * itemHeight),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('Item 0'), findsOneWidget);
@@ -97,15 +100,17 @@ void main() {
     expect(find.text('Item 3'), findsNothing);
 
     expect(
-        itemPositionsNotifier.itemPositions.value
-            .firstWhere((position) => position.index == 0)
-            .itemLeadingEdge,
-        0);
+      itemPositionsNotifier.itemPositions.value
+          .firstWhere((position) => position.index == 0)
+          .itemLeadingEdge,
+      0,
+    );
     expect(
-        itemPositionsNotifier.itemPositions.value
-            .firstWhere((position) => position.index == 2)
-            .itemTrailingEdge,
-        _screenProportion(numberOfItems: 3, numberOfSeparators: 2));
+      itemPositionsNotifier.itemPositions.value
+          .firstWhere((position) => position.index == 2)
+          .itemTrailingEdge,
+      _screenProportion(numberOfItems: 3, numberOfSeparators: 2),
+    );
   });
 
   testWidgets('List positioned with 0 at top', (WidgetTester tester) async {
@@ -119,21 +124,24 @@ void main() {
     expect(find.text('Item 7'), findsNothing);
 
     expect(
-        itemPositionsNotifier.itemPositions.value
-            .firstWhere((position) => position.index == 0)
-            .itemLeadingEdge,
-        0);
+      itemPositionsNotifier.itemPositions.value
+          .firstWhere((position) => position.index == 0)
+          .itemLeadingEdge,
+      0,
+    );
     expect(
-        itemPositionsNotifier.itemPositions.value
-            .firstWhere((position) => position.index == 5)
-            .itemTrailingEdge,
-        1 - _screenProportion(numberOfItems: 1, numberOfSeparators: 1));
+      itemPositionsNotifier.itemPositions.value
+          .firstWhere((position) => position.index == 5)
+          .itemTrailingEdge,
+      1 - _screenProportion(numberOfItems: 1, numberOfSeparators: 1),
+    );
 
     expect(
-        itemPositionsNotifier.itemPositions.value
-            .firstWhere((position) => position.index == 6)
-            .itemTrailingEdge,
-        1);
+      itemPositionsNotifier.itemPositions.value
+          .firstWhere((position) => position.index == 6)
+          .itemTrailingEdge,
+      1,
+    );
   });
 
   testWidgets('List positioned with 5 at top', (WidgetTester tester) async {
@@ -150,20 +158,23 @@ void main() {
     expect(find.text('Separator 11'), findsNothing);
 
     expect(
-        itemPositionsNotifier.itemPositions.value
-            .firstWhere((position) => position.index == 5)
-            .itemLeadingEdge,
-        0);
+      itemPositionsNotifier.itemPositions.value
+          .firstWhere((position) => position.index == 5)
+          .itemLeadingEdge,
+      0,
+    );
     expect(
-        itemPositionsNotifier.itemPositions.value
-            .firstWhere((position) => position.index == 6)
-            .itemLeadingEdge,
-        _screenProportion(numberOfItems: 1, numberOfSeparators: 1));
+      itemPositionsNotifier.itemPositions.value
+          .firstWhere((position) => position.index == 6)
+          .itemLeadingEdge,
+      _screenProportion(numberOfItems: 1, numberOfSeparators: 1),
+    );
     expect(
-        itemPositionsNotifier.itemPositions.value
-            .firstWhere((position) => position.index == 11)
-            .itemTrailingEdge,
-        1);
+      itemPositionsNotifier.itemPositions.value
+          .firstWhere((position) => position.index == 11)
+          .itemTrailingEdge,
+      1,
+    );
   });
 
   testWidgets('List positioned with 20 at bottom', (WidgetTester tester) async {
@@ -179,82 +190,101 @@ void main() {
     expect(find.text('Separator 12'), findsNothing);
 
     expect(
-        itemPositionsNotifier.itemPositions.value
-            .firstWhere((position) => position.index == 19)
-            .itemTrailingEdge,
-        1 - _screenProportion(numberOfItems: 0, numberOfSeparators: 1));
+      itemPositionsNotifier.itemPositions.value
+          .firstWhere((position) => position.index == 19)
+          .itemTrailingEdge,
+      1 - _screenProportion(numberOfItems: 0, numberOfSeparators: 1),
+    );
     expect(
-        itemPositionsNotifier.itemPositions.value
-            .firstWhere((position) => position.index == 20)
-            .itemLeadingEdge,
-        1);
+      itemPositionsNotifier.itemPositions.value
+          .firstWhere((position) => position.index == 20)
+          .itemLeadingEdge,
+      1,
+    );
     expect(
-        itemPositionsNotifier.itemPositions.value
-            .firstWhere((position) => position.index == 13)
-            .itemLeadingEdge,
-        _screenProportion(numberOfItems: -0.5, numberOfSeparators: 0));
+      itemPositionsNotifier.itemPositions.value
+          .firstWhere((position) => position.index == 13)
+          .itemLeadingEdge,
+      _screenProportion(numberOfItems: -0.5, numberOfSeparators: 0),
+    );
   });
 
-  testWidgets('List positioned with item 20 at halfway',
-      (WidgetTester tester) async {
+  testWidgets('List positioned with item 20 at halfway', (
+    WidgetTester tester,
+  ) async {
     await setUpWidgetTest(tester, topItem: 20, anchor: 0.5);
     await tester.pump();
 
     expect(
-        itemPositionsNotifier.itemPositions.value
-            .firstWhere((position) => position.index == 20)
-            .itemLeadingEdge,
-        0.5);
+      itemPositionsNotifier.itemPositions.value
+          .firstWhere((position) => position.index == 20)
+          .itemLeadingEdge,
+      0.5,
+    );
     expect(
-        itemPositionsNotifier.itemPositions.value
-            .firstWhere((position) => position.index == 20)
-            .itemTrailingEdge,
-        0.5 + itemHeight / screenHeight);
+      itemPositionsNotifier.itemPositions.value
+          .firstWhere((position) => position.index == 20)
+          .itemTrailingEdge,
+      0.5 + itemHeight / screenHeight,
+    );
   });
 
-  testWidgets('List positioned with item 20 half off top of screen',
-      (WidgetTester tester) async {
-    await setUpWidgetTest(tester,
-        topItem: 20, anchor: -(itemHeight / screenHeight) / 2);
+  testWidgets('List positioned with item 20 half off top of screen', (
+    WidgetTester tester,
+  ) async {
+    await setUpWidgetTest(
+      tester,
+      topItem: 20,
+      anchor: -(itemHeight / screenHeight) / 2,
+    );
     await tester.pump();
 
     expect(
-        itemPositionsNotifier.itemPositions.value
-            .firstWhere((position) => position.index == 20)
-            .itemLeadingEdge,
-        _screenProportion(numberOfItems: -0.5, numberOfSeparators: 0));
+      itemPositionsNotifier.itemPositions.value
+          .firstWhere((position) => position.index == 20)
+          .itemLeadingEdge,
+      _screenProportion(numberOfItems: -0.5, numberOfSeparators: 0),
+    );
     expect(
-        itemPositionsNotifier.itemPositions.value
-            .firstWhere((position) => position.index == 20)
-            .itemTrailingEdge,
-        _screenProportion(numberOfItems: 0.5, numberOfSeparators: 0));
+      itemPositionsNotifier.itemPositions.value
+          .firstWhere((position) => position.index == 20)
+          .itemTrailingEdge,
+      _screenProportion(numberOfItems: 0.5, numberOfSeparators: 0),
+    );
   });
 
-  testWidgets('List positioned with 5 at top then scroll up 2 items',
-      (WidgetTester tester) async {
+  testWidgets('List positioned with 5 at top then scroll up 2 items', (
+    WidgetTester tester,
+  ) async {
     await setUpWidgetTest(tester, topItem: 5);
 
-    await tester.drag(find.byType(PositionedList),
-        const Offset(0, 2 * (itemHeight + separatorHeight)));
+    await tester.drag(
+      find.byType(PositionedList),
+      const Offset(0, 2 * (itemHeight + separatorHeight)),
+    );
     await tester.pump();
 
     expect(find.text('Separator 2'), findsNothing);
     expect(find.text('Item 3'), findsOneWidget);
 
     expect(
-        itemPositionsNotifier.itemPositions.value
-            .firstWhere((position) => position.index == 2)
-            .itemLeadingEdge,
-        _screenProportion(numberOfItems: -1, numberOfSeparators: -1));
+      itemPositionsNotifier.itemPositions.value
+          .firstWhere((position) => position.index == 2)
+          .itemLeadingEdge,
+      _screenProportion(numberOfItems: -1, numberOfSeparators: -1),
+    );
     expect(
-        itemPositionsNotifier.itemPositions.value
-            .firstWhere((position) => position.index == 3)
-            .itemLeadingEdge,
-        0);
+      itemPositionsNotifier.itemPositions.value
+          .firstWhere((position) => position.index == 3)
+          .itemLeadingEdge,
+      0,
+    );
   });
 }
 
-double _screenProportion(
-        {required double numberOfItems, required double numberOfSeparators}) =>
+double _screenProportion({
+  required double numberOfItems,
+  required double numberOfSeparators,
+}) =>
     (numberOfItems * itemHeight + numberOfSeparators * separatorHeight) /
     screenHeight;
