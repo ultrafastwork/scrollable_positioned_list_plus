@@ -5,7 +5,6 @@
 import 'dart:async';
 import 'dart:math';
 
-import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
@@ -759,10 +758,7 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
       );
     }
     final notifier = widget.itemPositionsNotifier?.itemPositions;
-    final current = notifier?.value;
-    if (notifier != null &&
-        !(current is List<ItemPosition> &&
-            listEquals(current, itemPositions))) {
+    if (notifier != null && !samePositions(notifier.value, itemPositions)) {
       notifier.value = itemPositions;
     }
   }

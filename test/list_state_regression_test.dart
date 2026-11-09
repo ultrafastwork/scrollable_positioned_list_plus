@@ -420,6 +420,53 @@ void main() {
       expect(completed, isTrue);
     });
   });
+
+  group('Task 13: reordered but identical positions do not notify', () {
+    testWidgets('jumpTo the item already at the top', (tester) async {
+      final itemScrollController = ItemScrollController();
+      final itemPositionsListener = ItemPositionsListener.create();
+      await setUpWidgetTest(
+        tester,
+        itemScrollController: itemScrollController,
+        itemPositionsListener: itemPositionsListener,
+      );
+      // Drag far enough that the first items leave the cache extent, then back,
+      // so the visible items re-register (and are reported) out of index order.
+      await tester.drag(
+        find.byType(ScrollablePositionedList),
+        const Offset(0, -45 * itemHeight),
+      );
+      await tester.pumpAndSettle();
+      await tester.drag(
+        find.byType(ScrollablePositionedList),
+        const Offset(0, 40 * itemHeight),
+      );
+      await tester.pumpAndSettle();
+      final before = itemPositionsListener.itemPositions.value.toList();
+      expect(
+        before.firstWhere((position) => position.index == 5).itemLeadingEdge,
+        0,
+      );
+
+      var notifications = 0;
+      void onPositions() => notifications++;
+      itemPositionsListener.itemPositions.addListener(onPositions);
+      addTearDown(
+        () => itemPositionsListener.itemPositions.removeListener(onPositions),
+      );
+
+      // Re-anchors the list at item 5, which rebuilds its items, but nothing
+      // moves on screen.
+      itemScrollController.jumpTo(index: 5);
+      await tester.pumpAndSettle();
+
+      expect(
+        itemPositionsListener.itemPositions.value.toSet(),
+        before.toSet(),
+      );
+      expect(notifications, 0);
+    });
+  });
 }
 
 /// Lays its child out twice per layout when [enabled]: first slightly smaller
