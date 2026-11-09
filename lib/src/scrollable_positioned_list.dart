@@ -319,6 +319,15 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
 
   void Function() startAnimationCallback = () {};
 
+  /// Completers awaited by a long-distance scroll whose
+  /// [startAnimationCallback] hasn't run yet. Completed by
+  /// [_cancelPendingStart] so an abandoned scroll's future doesn't hang.
+  List<Completer<void>>? _pendingStartCompleters;
+
+  /// Identifies the latest long-distance scroll, so a superseded one doesn't
+  /// stop its successor's transition when its own future completes.
+  int _transitionId = 0;
+
   bool _isTransitioning = false;
 
   AnimationController? _animationController;
@@ -581,10 +590,15 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
       final scrollAmount =
           _screenScrollCount *
           primary.scrollController.position.viewportDimension;
+      _cancelPendingStart();
+      final transitionId = ++_transitionId;
       final startCompleter = Completer<void>();
       final endCompleter = Completer<void>();
+      _pendingStartCompleters = [startCompleter, endCompleter];
       startAnimationCallback = () {
         SchedulerBinding.instance.addPostFrameCallback((_) {
+          if (startCompleter.isCompleted) return;
+          _pendingStartCompleters = null;
           startAnimationCallback = () {};
           _animationController?.dispose();
           final animationController = _animationController =
@@ -617,14 +631,27 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
         });
       };
       setState(() {
-        // TODO: _startScroll can be re-entrant, which invalidates this assert.
-        // assert(!_isTransitioning);
+        // _startScroll can be re-entrant (two scrollTo calls while
+        // transitioning), so `assert(!_isTransitioning)` doesn't hold here.
+        // The superseded scroll's pending start is completed above instead.
         secondary.target = index;
         secondary.alignment = alignment;
         _isTransitioning = true;
       });
       await Future.wait<void>([startCompleter.future, endCompleter.future]);
-      _stopScroll();
+      if (transitionId == _transitionId) _stopScroll();
+    }
+  }
+
+  /// Completes the futures of a long-distance scroll whose transition never
+  /// started, and drops its stale [startAnimationCallback].
+  void _cancelPendingStart() {
+    final pending = _pendingStartCompleters;
+    if (pending == null) return;
+    _pendingStartCompleters = null;
+    startAnimationCallback = () {};
+    for (final completer in pending) {
+      if (!completer.isCompleted) completer.complete();
     }
   }
 
@@ -632,6 +659,8 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
     if (!_isTransitioning) {
       return;
     }
+
+    _cancelPendingStart();
 
     if (canceled) {
       if (primary.scrollController.hasClients) {

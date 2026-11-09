@@ -28,6 +28,7 @@ The scroll-offset listener now survives the list swap. `ScrollOffsetController` 
 - **Acceptance:** add a test that two listeners both receive deltas. Existing `test/scroll_offset_listener_test.dart` still passes.
 
 ### 2. `scrollTo` future can never complete
+**Status:** done in agent/list-state — pending start completers are kept in state and completed (stale `startAnimationCallback` reset) by `_stopScroll`; a transition id stops a superseded scroll from stopping its successor.
 - **File:** `lib/src/scrollable_positioned_list.dart`, `_startScroll` (~line 570) and `_stopScroll` (~line 645)
 - **Problem:** in the long-distance path, `startCompleter` and `endCompleter` are only completed inside `startAnimationCallback`. That callback only runs when the secondary list's `PostMountCallback` mounts. If `_stopScroll(canceled: true)` runs (pointer-down, `jumpTo`, or a new `scrollTo`) after `setState(_isTransitioning = true)` but before the next frame builds the secondary list, the secondary list is never mounted. The awaited `Future.wait` then never completes, so the caller's `await scrollTo(...)` hangs. The stale `startAnimationCallback` also stays set and may fire on an unrelated later mount.
 - **Fix direction:** keep the pending completers (or a single "pending start" handle) in state. In `_stopScroll`, if the start callback hasn't run yet, reset `startAnimationCallback = () {}` and complete the pending completers. Look at the re-entrancy `TODO` at ~line 627 at the same time.
