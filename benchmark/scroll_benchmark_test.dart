@@ -21,7 +21,7 @@ const _frameDuration = Duration(milliseconds: 16);
 Future<void> _pumpList(
   WidgetTester tester, {
   required ItemScrollController itemScrollController,
-  required ItemPositionsListener itemPositionsListener,
+  required ItemPositionsListener? itemPositionsListener,
   bool separated = false,
 }) async {
   tester.view.physicalSize = const Size(400, 800);
@@ -100,6 +100,19 @@ void main() {
       final micros = await _dragFrames(tester, frames: _frames, delta: 7);
       _report('drag scroll ($label)', micros);
       expect(notifications, greaterThan(0));
+    });
+
+    testWidgets('drag scroll, no listener ($label)', (tester) async {
+      await _pumpList(
+        tester,
+        itemScrollController: ItemScrollController(),
+        itemPositionsListener: null,
+        separated: separated,
+      );
+
+      await _dragFrames(tester, frames: _warmupFrames, delta: 7);
+      final micros = await _dragFrames(tester, frames: _frames, delta: 7);
+      _report('drag scroll, no listener ($label)', micros);
     });
 
     testWidgets('long scrollTo ($label)', (tester) async {
