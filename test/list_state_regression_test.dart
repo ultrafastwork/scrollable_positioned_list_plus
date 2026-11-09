@@ -45,6 +45,33 @@ void main() {
     );
   }
 
+  group('Task 1: ScrollOffsetListener is a broadcast stream', () {
+    testWidgets('two listeners both receive deltas', (tester) async {
+      final scrollOffsetListener = ScrollOffsetListener.create();
+      final first = <double>[];
+      final second = <double>[];
+      final subscriptions = [
+        scrollOffsetListener.changes.listen(first.add),
+        scrollOffsetListener.changes.listen(second.add),
+      ];
+      addTearDown(() async {
+        for (final subscription in subscriptions) {
+          await subscription.cancel();
+        }
+      });
+      await setUpWidgetTest(tester, scrollOffsetListener: scrollOffsetListener);
+
+      await tester.drag(
+        find.byType(ScrollablePositionedList),
+        const Offset(0, -50),
+      );
+      await tester.pumpAndSettle();
+
+      expect(first.fold<double>(0, (a, b) => a + b), 50);
+      expect(second, first);
+    });
+  });
+
   group('Task 2: scrollTo future completes when canceled before start', () {
     testWidgets('canceled by jumpTo before the next frame', (tester) async {
       final itemScrollController = ItemScrollController();

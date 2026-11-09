@@ -6,6 +6,9 @@ import 'scroll_offset_notifier.dart';
 /// Behavior may be ill-defined in some cases.  Please file bugs.
 abstract class ScrollOffsetListener {
   /// Stream of scroll offset deltas.
+  ///
+  /// This is a broadcast stream: it can be listened to more than once, and
+  /// deltas emitted while nobody is listening are dropped, not replayed.
   Stream<double> get changes;
 
   /// Construct a ScrollOffsetListener.

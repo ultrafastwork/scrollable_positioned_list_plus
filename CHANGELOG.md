@@ -1,4 +1,5 @@
 # Unreleased
+* `ScrollOffsetListener.changes` is now a broadcast stream. It can have several listeners, and deltas emitted while nobody listens are dropped instead of being buffered in memory without limit (and replayed to a late listener).
 * `ItemScrollController.jumpTo` no longer reports a scroll offset change to `ScrollOffsetListener`. It used to report `-previousOffset` (even with `recordProgrammaticScrolls: false`), although nothing moved on screen.
 * Migrate off deprecated Flutter APIs: `cacheExtent`/`cacheExtentStyle` → `ScrollCacheExtent`, `Matrix4.translate` → `translateByDouble`.
 * Remove the `collection` dependency and the discontinued `pedantic` dev dependency.

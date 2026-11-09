@@ -9,7 +9,9 @@ class ScrollOffsetNotifier implements ScrollOffsetListener {
   /// Whether scrolls triggered by the list's controllers are reported.
   final bool recordProgrammaticScrolls;
 
-  final _streamController = StreamController<double>();
+  // Broadcast, so deltas aren't buffered while nobody listens and several
+  // listeners are allowed.
+  final _streamController = StreamController<double>.broadcast();
 
   @override
   Stream<double> get changes => _streamController.stream;

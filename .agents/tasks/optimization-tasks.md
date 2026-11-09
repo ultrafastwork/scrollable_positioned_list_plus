@@ -21,6 +21,7 @@ The scroll-offset listener now survives the list swap. `ScrollOffsetController` 
 ## Correctness
 
 ### 1. `ScrollOffsetListener` buffers events without limit — NEEDS OWNER DECISION
+**Status:** done in agent/list-state-followups — owner approved; `StreamController<double>.broadcast()`, doc comment on `changes` updated, changelog entry added. Regression test: two listeners both receive deltas (the second `listen` threw "Stream has already been listened to" before).
 - **File:** `lib/src/scroll_offset_notifier.dart:12`
 - **Problem:** `StreamController<double>()` creates a single-subscription stream. If a `ScrollOffsetListener` is passed to the list but nobody calls `changes.listen` (or listens late), every scroll delta is buffered in memory forever. A second `listen` throws.
 - **Proposed fix:** `StreamController<double>.broadcast()`.
