@@ -9,14 +9,14 @@ This file is the index. Each task has its own file in this directory with the fu
 
 - **Don't break existing behaviour.** On `a0ee16b`, `flutter test` gives 204 passed and 0 skipped. That must still hold after your change (plus any tests you add), and `flutter analyze` must report no issues. For tasks 1–10 the baseline was `598e545` (182 passed, 2 skipped).
 - **Prove the bug first.** For a correctness task, add a regression test that fails before your fix and passes with it. Check this by stashing `lib/`, running the test, then restoring.
-- **Prove the gain.** For a performance task, record before/after numbers in the task file, from [task 22](22-device-profiling-harness.md) if a device is available, otherwise from `flutter test benchmark/scroll_benchmark_test.dart` (relative numbers only). If there's no measurable gain, don't merge: record the numbers and close the task as "not worth it".
+- **Prove the gain.** For a performance task, record before/after numbers in the task file, from the [task 22](22-device-profiling-harness.md) device harness if a device is available, otherwise from `flutter test benchmark/scroll_benchmark_test.dart` (relative numbers only). If there's no measurable gain, don't merge: record the numbers and close the task as "not worth it".
 - **Ask before changing public behaviour.** If a task is marked **NEEDS OWNER DECISION**, don't change observable behaviour or add public API without the owner's approval. Implement it behind the approved option only, and add a changelog entry.
 - **Keep commits small.** Make one commit per task (or per part, where a task has parts), and don't touch unrelated code.
 - **Line numbers** are for the commit named at the top of each task file.
 
 ## Open tasks
 
-Recommended order: **22 → 19 → 18 → 20 → 21.**
+Recommended order: **19 → 18 → 20 → 21.** (22 is done.)
 
 | # | Task | Area | Status |
 |---|------|------|--------|
@@ -24,13 +24,22 @@ Recommended order: **22 → 19 → 18 → 20 → 21.**
 | 19 | [Compute item positions only when needed, and more cheaply](19-lazy-position-computation.md) | performance | not started |
 | 20 | [Fixed-extent mode (`itemExtent` / `prototypeItem`)](20-fixed-extent-mode.md) — NEEDS OWNER DECISION | performance, new API | not started |
 | 21 | [Reduce the cost of the long-scroll crossfade](21-transition-cost.md) (low priority) | performance | not started |
-| 22 | [Profile-mode performance harness on a real device](22-device-profiling-harness.md) | measurement | not started |
 
 **File conflicts:**
 - Tasks 18, 19, 20 and 21 all edit `lib/src/scrollable_positioned_list.dart`, and 19 and 20 also edit `lib/src/positioned_list.dart`. Give them to one agent or do them one after another.
-- Task 22 only touches `example/`, so it can run in parallel with anything.
+- Task 20 should also add `itemExtent` scenarios to `example/integration_test/perf_test.dart` (scenario 6 of task 22).
 
-**Running the device harness (task 22):** from `example/`, run `flutter drive --profile --driver=test_driver/perf_driver.dart --target=integration_test/perf_test.dart -d <device>`. Results are written to `example/build/perf/`.
+**Running the device harness (task 22):** connect a real Android or iOS device (`fvm flutter devices`), then from `example/` run:
+
+```
+fvm flutter drive --profile --no-dds --driver=test_driver/perf_driver.dart --target=integration_test/perf_test.dart -d <device>
+```
+
+- `--no-dds` is required, because `watchPerformance` connects to the VM service. Without it, every scenario fails with `Connection reset by peer`.
+- A run takes about 2 minutes plus build time.
+- It writes one JSON summary per scenario to `example/build/perf/` and prints a Markdown table to paste into the task file.
+- Compare against the baseline in [task 22](22-device-profiling-harness.md#baseline), on the same device. Run each side at least twice, because averages vary by about 5–10 % between runs.
+- The harness lives outside `test/`, so neither `flutter test` run picks it up, and it isn't in CI.
 
 ## Done
 
@@ -65,6 +74,7 @@ Recommended order: **22 → 19 → 18 → 20 → 21.**
 | # | Task | Status |
 |---|------|--------|
 | 14 | [Add `.gitattributes` for line endings](14-gitattributes-line-endings.md) | done |
+| 22 | [Profile-mode performance harness on a real device](22-device-profiling-harness.md) | done (baseline on Redmi Note 15) |
 
 ### Already fixed in 598e545 (don't redo)
 
