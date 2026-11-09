@@ -135,6 +135,8 @@ class CustomRenderShrinkWrappingViewport extends CustomRenderViewport {
 
   double lastMainAxisExtent = -1;
 
+  static const int _maxLayoutCycles = 10;
+
   @override
   set anchor(double value) {
     if (value == _anchor) return;
@@ -196,19 +198,21 @@ class CustomRenderShrinkWrappingViewport extends CustomRenderViewport {
 
     double correction;
     double effectiveExtent;
+    var count = 0;
     do {
       correction = _attemptLayout(
         mainAxisExtent,
         crossAxisExtent,
         offset.pixels + centerOffsetAdjustment,
       );
+      // Computed on every pass so it is set even if the cycle cap is reached.
+      effectiveExtent = switch (axis) {
+        Axis.vertical => constraints.constrainHeight(_shrinkWrapExtent),
+        Axis.horizontal => constraints.constrainWidth(_shrinkWrapExtent),
+      };
       if (correction != 0.0) {
         offset.correctBy(correction);
       } else {
-        effectiveExtent = switch (axis) {
-          Axis.vertical => constraints.constrainHeight(_shrinkWrapExtent),
-          Axis.horizontal => constraints.constrainWidth(_shrinkWrapExtent),
-        };
         // *** Difference from [RenderViewport].
         final top = _minScrollExtent + mainAxisExtent * anchor;
         final bottom = _maxScrollExtent - mainAxisExtent * (1.0 - anchor);
@@ -227,7 +231,36 @@ class CustomRenderShrinkWrappingViewport extends CustomRenderViewport {
           break;
         }
       }
-    } while (true);
+      count += 1;
+    } while (count < _maxLayoutCycles);
+    assert(() {
+      if (count >= _maxLayoutCycles) {
+        assert(count != 1);
+        throw FlutterError(
+          'A CustomRenderShrinkWrappingViewport exceeded its maximum number of '
+          'layout cycles.\n'
+          'Viewport render objects, during layout, can retry if either their '
+          'slivers or their ViewportOffset decide that the offset should be '
+          'corrected to take into account information collected during that '
+          'layout.\n'
+          'In the case of this viewport, however, this happened $count times '
+          'and still there was no consensus on the scroll offset. This usually '
+          'indicates a bug. Specifically, it means that one of the following '
+          'three problems is being experienced by the viewport:\n'
+          ' * One of the RenderSliver children or the ViewportOffset have a bug '
+          'such that they always think that they need to correct the offset '
+          'regardless.\n'
+          ' * Some combination of the RenderSliver children and the '
+          'ViewportOffset have a bad interaction such that one applies a '
+          'correction then another applies a reverse correction, leading to an '
+          'infinite loop of corrections.\n'
+          ' * There is a pathological case that would eventually resolve, but '
+          'it is so complicated that it cannot be resolved in any reasonable '
+          'number of layout passes.',
+        );
+      }
+      return true;
+    }());
     size = switch (axis) {
       Axis.vertical => constraints.constrainDimensions(
         crossAxisExtent,

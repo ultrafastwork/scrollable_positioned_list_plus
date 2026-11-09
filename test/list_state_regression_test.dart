@@ -11,6 +11,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrollable_positioned_list_plus/scrollable_positioned_list_plus.dart';
 import 'package:scrollable_positioned_list_plus/src/element_registry.dart';
+import 'package:scrollable_positioned_list_plus/src/wrapping.dart';
 
 const screenHeight = 400.0;
 const screenWidth = 400.0;
@@ -290,6 +291,41 @@ void main() {
     });
   });
 
+  group('Task 7: shrink-wrap viewport caps its layout cycles', () {
+    testWidgets('throws after too many scroll offset corrections', (
+      tester,
+    ) async {
+      // The aborted layout is followed by a "not laid out" error during paint,
+      // so collect every error and check the first one.
+      final errors = <FlutterErrorDetails>[];
+      final previousOnError = FlutterError.onError;
+      FlutterError.onError = errors.add;
+      try {
+        await tester.pumpWidget(
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: CustomShrinkWrappingViewport(
+              offset: ViewportOffset.zero(),
+              slivers: const [_CorrectingSliver(corrections: 20)],
+            ),
+          ),
+        );
+      } finally {
+        FlutterError.onError = previousOnError;
+      }
+
+      expect(errors, isNotEmpty);
+      expect(
+        errors.first.exception,
+        isA<FlutterError>().having(
+          (error) => error.message,
+          'message',
+          contains('exceeded its maximum number of layout cycles'),
+        ),
+      );
+    });
+  });
+
   group('Task 8: position listeners only fire when positions change', () {
     testWidgets('parent rebuild with identical props does not notify', (
       tester,
@@ -557,6 +593,34 @@ void main() {
       expect(notifications, 0);
     });
   });
+}
+
+/// A sliver that asks its viewport for a scroll offset correction on each of
+/// its first [corrections] layouts, then lays out as empty.
+class _CorrectingSliver extends LeafRenderObjectWidget {
+  const _CorrectingSliver({required this.corrections});
+
+  final int corrections;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderCorrectingSliver(corrections);
+}
+
+class _RenderCorrectingSliver extends RenderSliver {
+  _RenderCorrectingSliver(this._remaining);
+
+  int _remaining;
+
+  @override
+  void performLayout() {
+    if (_remaining > 0) {
+      _remaining--;
+      geometry = const SliverGeometry(scrollOffsetCorrection: 1);
+    } else {
+      geometry = SliverGeometry.zero;
+    }
+  }
 }
 
 /// Lays its child out twice per layout when [enabled]: first slightly smaller
