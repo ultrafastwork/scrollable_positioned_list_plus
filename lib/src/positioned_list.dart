@@ -186,6 +186,7 @@ class _PositionedListState extends State<PositionedList> {
       slivers: <Widget>[
         if (widget.positionedIndex > 0)
           SliverPadding(
+            key: ValueKey((#leading, widget.positionedIndex)),
             padding: _leadingSliverPadding,
             sliver: SliverList(
               delegate: SliverChildBuilderDelegate(
@@ -223,6 +224,7 @@ class _PositionedListState extends State<PositionedList> {
         if (widget.positionedIndex >= 0 &&
             widget.positionedIndex < widget.itemCount - 1)
           SliverPadding(
+            key: ValueKey((#trailing, widget.positionedIndex)),
             padding: _trailingSliverPadding,
             sliver: SliverList(
               delegate: SliverChildBuilderDelegate(

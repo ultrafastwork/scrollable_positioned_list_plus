@@ -831,7 +831,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.getTopLeft(find.text('Item 100')).dy, 0);
-  }, skip: true);
+  });
 
   testWidgets('Scroll to 100 and position at bottom', (
     WidgetTester tester,
