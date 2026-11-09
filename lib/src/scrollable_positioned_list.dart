@@ -409,6 +409,7 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
   void dispose() {
     // The position listeners added in initState go away with the notifiers,
     // which are disposed below.
+    _cancelPendingStart();
     _animationController?.dispose();
     for (final details in [primary, secondary]) {
       details.scrollController.dispose();

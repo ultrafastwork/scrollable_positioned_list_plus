@@ -346,6 +346,24 @@ void main() {
       expect(find.text('Item 300'), findsOneWidget);
     });
   });
+
+  group('Task 11: scrollTo future completes when the list is disposed', () {
+    testWidgets('list replaced before the transition starts', (tester) async {
+      final itemScrollController = ItemScrollController();
+      await setUpWidgetTest(tester, itemScrollController: itemScrollController);
+
+      var completed = false;
+      unawaited(
+        itemScrollController
+            .scrollTo(index: 300, duration: scrollDuration)
+            .then((_) => completed = true),
+      );
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpAndSettle();
+
+      expect(completed, isTrue);
+    });
+  });
 }
 
 class _CountingBucket extends PageStorageBucket {

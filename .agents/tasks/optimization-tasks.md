@@ -90,6 +90,7 @@ The scroll-offset listener now survives the list swap. `ScrollOffsetController` 
 Line numbers below are for `e72c4d4` (tip of `agent/list-state`), not `598e545`. Tasks 11 and 12 edit `lib/src/scrollable_positioned_list.dart`, so do them after the group above or with the same agent.
 
 ### 11. `scrollTo` future hangs if the list is disposed before the transition starts
+**Status:** done in agent/list-state-followups — `dispose` now calls `_cancelPendingStart()`, so a long scroll's pending futures complete when the list is removed before the secondary list mounts.
 - **File:** `lib/src/scrollable_positioned_list.dart`, `dispose` (~line 409)
 - **Problem:** task 2 completes a long scroll's pending futures in `_stopScroll`, but `dispose` doesn't. If the list is removed after `scrollTo(index: far)` and before the secondary list mounts, `await scrollTo(...)` never completes.
 - **Fix direction:** call `_cancelPendingStart()` in `dispose`.
