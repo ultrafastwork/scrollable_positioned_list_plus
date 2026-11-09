@@ -1,0 +1,86 @@
+# scrollable_positioned_list_plus — performance & correctness task list
+
+Repo: https://github.com/ultrafastwork/scrollable_positioned_list_plus (branch `main`, base commit `598e545`).
+Flutter package; all source is in `lib/src/`, tests in `test/`.
+
+## Ground rules for every task
+
+- **Don't break existing behaviour.** On `598e545`, `flutter test` gives 182 passed and 2 skipped. That must still hold after your change, and `flutter analyze` must report no issues.
+- **Prove the bug first.** For a correctness task, add a regression test that fails on `598e545` and passes with your fix. Check this by stashing `lib/`, running the test, then restoring.
+- **Ask before changing public behaviour.** If a task is marked **NEEDS OWNER DECISION**, don't change observable behaviour without the owner's approval. Implement it behind the approved option only.
+- **Keep commits small.** Make one commit per task, and don't touch unrelated code.
+- **Watch for file conflicts.** Tasks 2, 3, 4, 6, 8 and 9 all edit `lib/src/scrollable_positioned_list.dart`, so give them to one agent or do them one after another. Tasks 8 and 9 both change position reporting, so do 8 first. Tasks 1, 5, 7 and 10 each touch a different file and can run in parallel.
+- **Line numbers** are for `598e545`.
+
+## Already fixed in 598e545 (don't redo)
+
+The scroll-offset listener now survives the list swap. `ScrollOffsetController` is re-attached in `didUpdateWidget`. Index is clamped. `PageStorage.maybeOf` is used. The post-frame callback has `mounted`/`hasClients` guards. Controllers and notifiers are disposed. The registry `updateShouldNotify` no longer always returns `true`. Positions are materialized once, the `ReverseAnimation` is cached, and redundant `setState` calls are gone.
+
+---
+
+## Correctness
+
+### 1. `ScrollOffsetListener` buffers events without limit — NEEDS OWNER DECISION
+- **File:** `lib/src/scroll_offset_notifier.dart:12`
+- **Problem:** `StreamController<double>()` creates a single-subscription stream. If a `ScrollOffsetListener` is passed to the list but nobody calls `changes.listen` (or listens late), every scroll delta is buffered in memory forever. A second `listen` throws.
+- **Proposed fix:** `StreamController<double>.broadcast()`.
+- **Behaviour change:** events emitted before anyone listens are dropped, not replayed, and multiple listeners become allowed. Get owner approval, then add a changelog entry.
+- **Acceptance:** add a test that two listeners both receive deltas. Existing `test/scroll_offset_listener_test.dart` still passes.
+
+### 2. `scrollTo` future can never complete
+- **File:** `lib/src/scrollable_positioned_list.dart`, `_startScroll` (~line 570) and `_stopScroll` (~line 645)
+- **Problem:** in the long-distance path, `startCompleter` and `endCompleter` are only completed inside `startAnimationCallback`. That callback only runs when the secondary list's `PostMountCallback` mounts. If `_stopScroll(canceled: true)` runs (pointer-down, `jumpTo`, or a new `scrollTo`) after `setState(_isTransitioning = true)` but before the next frame builds the secondary list, the secondary list is never mounted. The awaited `Future.wait` then never completes, so the caller's `await scrollTo(...)` hangs. The stale `startAnimationCallback` also stays set and may fire on an unrelated later mount.
+- **Fix direction:** keep the pending completers (or a single "pending start" handle) in state. In `_stopScroll`, if the start callback hasn't run yet, reset `startAnimationCallback = () {}` and complete the pending completers. Look at the re-entrancy `TODO` at ~line 627 at the same time.
+- **Acceptance:** a test that calls `scrollTo(index: far)` and then, before pumping, cancels with `jumpTo` or a pointer-down. The returned future must complete after `pumpAndSettle`.
+
+### 3. `jumpTo` reports a fake offset delta — NEEDS OWNER DECISION
+- **File:** `lib/src/scrollable_positioned_list.dart`, `_jumpTo`
+- **Problem:** `_jumpTo` calls `primary.scrollController.jumpTo(0)` to re-anchor the list. The offset listener reports this as a scroll of `-previousOffset` even though nothing moved visually. It's reported even when `recordProgrammaticScrolls` is `false`, because `_isTransitioning` is false at that point.
+- **Fix direction:** set `previousOffset = 0` before the internal `jumpTo(0)`, or suppress reporting during it. Decide with the owner whether a `jumpTo` should report anything.
+- **Acceptance:** with `recordProgrammaticScrolls: false`, `jumpTo` emits no delta. Existing offset tests pass.
+
+### 4. Long-scroll direction uses a stale target — verify before fixing
+- **File:** `lib/src/scrollable_positioned_list.dart`, `_startScroll`: `final direction = index > primary.target ? 1 : -1;`
+- **Suspected problem:** `primary.target` is the item the list was last anchored to, not what's on screen. Say the user `jumpTo(50)`, then drags manually to item 200, then calls `scrollTo(100)`. The direction is computed as forward, so the transition animates the wrong way. It still ends at the right place.
+- **Fix direction:** derive the direction from the current visible positions, for example the lowest visible `index` in `primary.itemPositionsNotifier.itemPositions.value`. Fall back to `primary.target` if that's empty.
+- **Acceptance:** first write a test showing that intermediate positions move away from the target. If you can't reproduce it, drop the task and report back.
+
+### 5. Element registry keeps stale entries after reparenting
+- **File:** `lib/src/element_registry.dart`, `_RegisteredElement._register` / `didChangeDependencies`
+- **Problem:** if a registered element moves under a different `RegistryWidget` (GlobalKey reparenting), `_register` adds it to the new registry but never removes it from the old one. The old list then reports positions for an item it no longer contains.
+- **Fix:** in `_register`, if `_registryWidgetState` is already set and differs from the new one, remove `this` from the old set first. Make `_registryWidgetState` nullable instead of `late`.
+- **Acceptance:** this is unit-level. The rare scenario needs a test using a `GlobalKey`-keyed item moved between two lists. Keep the fix minimal.
+
+### 6. Calls on an unattached controller give unhelpful errors
+- **File:** `lib/src/scrollable_positioned_list.dart`, `ItemScrollController.jumpTo` and `ScrollOffsetController.animateScroll`
+- **Problem:** both dereference `_scrollableListState!` with no assert. A caller who forgot to attach the controller gets a bare null-check error. `scrollTo` already has an assert.
+- **Fix:** add `assert(_scrollableListState != null, '... is not attached to a ScrollablePositionedList')` to both. Debug-only, so there's no behaviour change in release.
+
+### 7. Add a layout-cycle guard to the shrink-wrap viewport
+- **File:** `lib/src/wrapping.dart:199-230`, `CustomRenderShrinkWrappingViewport.performLayout`
+- **Problem:** the `do { ... } while (true)` loop has no cycle cap. `UnboundedRenderViewport` (`viewport.dart:150-194`) caps at `_maxLayoutCycles = 10` and throws a descriptive error in debug. If corrections keep happening, shrink-wrap mode hangs forever instead.
+- **Fix:** mirror the `_maxLayoutCycles` counter and the debug `FlutterError` from `viewport.dart`. Leave the normal path unchanged.
+
+## Performance
+
+### 8. Don't notify position listeners when nothing changed
+- **Files:** `lib/src/positioned_list.dart` (end of the post-frame callback in `_schedulePositionNotificationUpdate`) and `lib/src/scrollable_positioned_list.dart` (`_updatePositions`)
+- **Problem:** every update assigns a new list to the `ValueNotifier`, so listeners always fire. Updates are scheduled on every `didUpdateWidget`, meaning every parent rebuild, even when no item moved. User widgets listening to `itemPositions` rebuild for nothing.
+- **Fix:** before assigning, compare with the current value element by element (`ItemPosition` already implements `==`/`hashCode`, and `listEquals` from `foundation` works once both are lists). Skip the assignment if they're equal. Watch for the internal notifier feeding `_updatePositions`: that must still run whenever primary and secondary swap, so keep a test around the swap.
+- **Acceptance:** a test where the parent rebuilds with identical props and the user's `itemPositions` listener isn't called. All existing position tests pass.
+
+### 9. Skip redundant `_updatePositions` work for the hidden secondary list
+- **File:** `lib/src/scrollable_positioned_list.dart`: `_updatePositions` listens to both the primary and secondary internal notifiers.
+- **Problem:** while transitioning, every secondary-list frame re-filters the primary's positions, rewrites `PageStorage` and re-notifies the user, even though primary positions didn't change in that callback.
+- **Fix direction:** register separate listeners per `_ListDisplayDetails`, as was done for scroll controllers in `598e545`. Only recompute when the source notifier belongs to the current `primary`. After the swap in `_stopScroll`, call `_updatePositions()` once explicitly so the user immediately sees the new primary's positions.
+- **Low priority.** Do it after task 8, and only if it stays simple.
+
+### 10. Remove dead state in the shrink-wrap viewport
+- **File:** `lib/src/wrapping.dart`: `lastMainAxisExtent` (line 136) is never read. `growSize` (line 809, written at line 342) is written but never read anywhere in `lib/`.
+- **Fix:** delete both. A pure cleanup; also check `test/` and `example/` for references first.
+
+---
+
+## Investigated and rejected (don't pick up)
+
+- **"Shrink-wrap in an unbounded parent builds every item."** It does (500 of 500 in a `SingleChildScrollView`), but so does Flutter's own `ListView(shrinkWrap: true)` in the same setup. That's inherent to shrink-wrapping, not a bug in this package.
