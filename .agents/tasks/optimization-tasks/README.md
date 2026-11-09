@@ -21,7 +21,7 @@ Recommended order: **23 → 18 → 20 → 21.** (19 and 22 are done.)
 | # | Task | Area | Status |
 |---|------|------|--------|
 | 23 | [A newly passed `itemPositionsListener` stays empty until something moves](23-new-listener-stays-empty.md) | correctness | not started |
-| 18 | [Shrink the default cache extent](18-default-cache-extent.md) — NEEDS OWNER DECISION | performance | not started |
+| 18 | [Shrink the default cache extent](18-default-cache-extent.md) — NEEDS OWNER DECISION | performance | blocked on owner decision (measured: about 25 % less build time while dragging, long-scroll jank frame halved; recommendation in the file) |
 | 20 | [Fixed-extent mode (`itemExtent` / `prototypeItem`)](20-fixed-extent-mode.md) — NEEDS OWNER DECISION | performance, new API | not started |
 | 21 | [Reduce the cost of the long-scroll crossfade](21-transition-cost.md) (low priority) | performance | not started |
 
