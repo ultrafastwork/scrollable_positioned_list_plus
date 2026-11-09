@@ -118,4 +118,44 @@ void main() {
       );
     });
   });
+
+  group('Task 3: jumpTo does not report a fake offset delta', () {
+    testWidgets('no delta with recordProgrammaticScrolls: false', (
+      tester,
+    ) async {
+      final itemScrollController = ItemScrollController();
+      final scrollOffsetListener = ScrollOffsetListener.create(
+        recordProgrammaticScrolls: false,
+      );
+      final deltas = <double>[];
+      final subscription = scrollOffsetListener.changes.listen(deltas.add);
+      addTearDown(subscription.cancel);
+      await setUpWidgetTest(
+        tester,
+        itemScrollController: itemScrollController,
+        scrollOffsetListener: scrollOffsetListener,
+        initialIndex: 5,
+      );
+
+      // Scroll by hand so the primary controller has a non-zero offset.
+      await tester.drag(
+        find.byType(ScrollablePositionedList),
+        const Offset(0, -50),
+      );
+      await tester.pumpAndSettle();
+      expect(deltas.fold<double>(0, (a, b) => a + b), 50);
+      deltas.clear();
+
+      itemScrollController.jumpTo(index: 100);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Item 100'), findsOneWidget);
+      expect(deltas, isEmpty);
+    }, skip: _task3Skip);
+  });
 }
+
+/// Task 3 is NEEDS OWNER DECISION: the fix lives in
+/// `.agents/tasks/task-3-jumpto-delta.patch` and isn't applied yet. Set this to
+/// `false` once the owner approves and the patch is applied.
+const _task3Skip = true;
