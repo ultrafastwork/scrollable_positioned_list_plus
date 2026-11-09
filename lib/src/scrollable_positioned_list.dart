@@ -555,6 +555,10 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
       final scrollCompleter = Completer<void>();
       _stopScroll(canceled: true);
       SchedulerBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) {
+          scrollCompleter.complete();
+          return;
+        }
         await _startScroll(
           index: index,
           alignment: alignment,

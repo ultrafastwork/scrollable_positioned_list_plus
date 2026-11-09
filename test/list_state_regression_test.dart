@@ -366,6 +366,35 @@ void main() {
     });
   });
 
+  group('Task 15: re-entrant scrollTo tolerates disposal', () {
+    testWidgets('list disposed before the deferred scroll starts', (
+      tester,
+    ) async {
+      final itemScrollController = ItemScrollController();
+      await setUpWidgetTest(tester, itemScrollController: itemScrollController);
+
+      unawaited(
+        itemScrollController.scrollTo(index: 300, duration: scrollDuration),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // Issued mid-transition, so its start is deferred to a post-frame
+      // callback, which runs after the list is disposed in the next frame.
+      var completed = false;
+      unawaited(
+        itemScrollController
+            .scrollTo(index: 50, duration: scrollDuration)
+            .then((_) => completed = true),
+      );
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(completed, isTrue);
+    });
+  });
+
   group('Task 12: long-scroll start callback tolerates disposal', () {
     testWidgets('list disposed after the secondary list mounts, same frame', (
       tester,
