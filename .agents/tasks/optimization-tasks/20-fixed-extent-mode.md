@@ -1,8 +1,69 @@
-# 20. Fixed-extent mode (`itemExtent` / `prototypeItem`) — NEEDS OWNER DECISION
+# 20. Fixed-extent mode (`itemExtent` / `prototypeItem`)
 
 **Area:** performance (new public API) · **Line numbers:** `884e7c8`
 
-**Status:** blocked on owner decision. A throwaway prototype was measured on the device (below). No code has changed. Answer the questions under [Recommendation](#recommendation) to unblock. (Re-checked on `884e7c8`: still no decision recorded; line numbers refreshed after task 21.)
+**Status:** done. Owner decisions are recorded under [Owner decisions](#owner-decisions-2026-11-10), and the result under [Implementation](#implementation) and [Final measurements](#final-measurements). A `scrollTo` about 3.5 screens away went from a 60 ms hitch frame and 10–11 missed frames to a p99 of 6–8 ms with 0–1 missed. Dragging is unchanged.
+
+## Owner decisions (2026-11-10)
+
+- **(a) API:** `itemExtent` + `prototypeItem` on `.builder`, mutually exclusive (the recommendation).
+- **(b) `.separated`:** add `separatorExtent` now. This goes against the recommendation, which was to leave it unsupported.
+- **(c) Long distances:** animate directly up to about 10 viewports, and crossfade beyond that (the recommendation).
+
+## Implementation
+
+- **Public API** ([scrollable_positioned_list.dart](../../../lib/src/scrollable_positioned_list.dart)):
+  - `.builder(itemExtent:, prototypeItem:)` asserts that the two aren't both set.
+  - `.separated(itemExtent:, separatorExtent:)` asserts both or neither. `prototypeItem` isn't a parameter of `.separated`, so passing it is a compile error. A prototype together with a separator extent would need a prototype-measuring varied-extent sliver; that can follow if someone asks.
+- **Slivers** ([positioned_list.dart](../../../lib/src/positioned_list.dart) `_sliver`): all three slivers (leading, center, trailing) use one of the following:
+  - `SliverFixedExtentList` for `itemExtent`.
+  - `SliverPrototypeExtentList` for `prototypeItem`.
+  - The new `SliverAlternatingExtentList` for `.separated` with `separatorExtent` ([alternating_extent_list.dart](../../../lib/src/alternating_extent_list.dart)).
+  - Without an extent, the plain `SliverList` is used as before.
+- **Why a custom sliver for `.separated`:** Flutter's `SliverVariedExtentList` finds the child at a scroll offset by walking from index 0. That costs O(index) per layout, so it would get slower the deeper into a long list you scroll. `RenderSliverAlternatingExtentList` extends `RenderSliverFixedExtentBoxAdaptor` and overrides `indexToLayoutOffset`, the two `get*ChildIndexForScrollOffset` methods, `computeMaxScrollOffset` and `estimateMaxScrollOffset` with closed forms. In the leading sliver (built in reverse) and in the trailing sliver, items are the odd children. In the center sliver the single item is child 0.
+- **`scrollTo`** (`_fixedExtentScrollOffset` and the check in `_startScroll`):
+  - **Reading the extent and padding:** in fixed-extent mode each list's center `SliverPadding` gets a `GlobalKey` (`_ListDisplayDetails.centerKey`; `PositionedList.centerKey`). From its render object, `scrollTo` reads `beforePadding` and, for `prototypeItem`, the sliver's `itemExtent`.
+    - Reading `beforePadding` from the render object instead of from `padding` means the result follows the axis direction the viewport actually uses, including RTL. When the anchor isn't item 0, `beforePadding` is 0, so the "padding only when `primary.target == 0`" rule falls out on its own.
+  - **Target offset:** `(index − primary.target) × stride + beforePadding + (primary.alignment − alignment) × viewport`, clamped to `minScrollExtent`/`maxScrollExtent`. `stride` is `itemExtent + separatorExtent`. Both scroll extents are exact with fixed-extent slivers.
+  - **Direct or crossfade:** if the offset is within `_maxDirectScrollScreens` (10) viewports of the current offset, the list animates straight there. Otherwise, and whenever the list isn't laid out yet, it falls back to the old logic: animate directly if the target is already built, else crossfade.
+  - **The default path is unchanged:** without an extent, `centerKey` isn't passed and `_fixedExtentScrollOffset` returns null at once.
+  - **Cache wiring:** `didUpdateWidget` already clears the cached `PositionedList`s, so changing `itemExtent`/`prototypeItem`/`separatorExtent` on a live list takes effect. The `_positionedList` cache check doesn't need the new fields.
+- **Tests** ([test/fixed_extent_scrollable_positioned_list_test.dart](../../../test/fixed_extent_scrollable_positioned_list_test.dart)): 36 tests, 12 for each mode (`itemExtent`, `prototypeItem`, `separated`).
+  - **What they cover:** items forced to the extent; alignment 0/0.5/1 forward into the trailing sliver and back into the leading sliver; horizontal; reversed; padding with the anchor at 0 and at 5 (including the clamp at the start); the last item (the clamp at the end); `shrinkWrap`; a target beyond the cap still crossfades; dragging through both slivers keeps a constant stride.
+  - **How "no crossfade" is checked:** every within-cap scroll checks on each frame that only one `FadeTransition` exists, so `_isTransitioning` never became true.
+  - **Sanity check:** with the cap temporarily set to 0, 30 of the 36 tests fail.
+- **Results:** `flutter test` gives 244 passed (208 + 36). `flutter analyze` (package and example) reports no issues.
+- **Docs:** a README section, "Fixed-height items", and a changelog entry under Unreleased.
+- **Harness** ([example/integration_test/perf_test.dart](../../../example/integration_test/perf_test.dart)): new scenarios are `medium_scroll_to` on the default path, plus `fixed_drag_with_listener`, `fixed_short_scroll_to`, `fixed_medium_scroll_to`, `fixed_medium_scroll_to_separated`, `fixed_9_screens_scroll_to` and `fixed_long_scroll_to`. The hybrid "jump, then animate" scenario was dropped (rejected).
+- **Untested:** RTL horizontal lists with `padding` while the anchor isn't item 0. `PositionedList` assigns left/right padding by `reverse` only, not by text direction, so the padding may land between items there. That's existing behaviour and not specific to this task.
+
+## Final measurements
+
+- **Device and toolchain:** the same as in the prototype measurements below: Redmi Note 15, Flutter 3.47.7, profile mode, `--no-dds`.
+- **Code:** the final implementation on top of `884e7c8`.
+- **Runs:** two full runs, A / B. Times are in ms, and missed frames are counted over 10 scrolls.
+- **Viewport:** inside `SafeArea` it is under 792 px. Two earlier runs showed that targets 110 and 120 items away (7,920 and 8,640 px) are already over the cap and crossfade. Their numbers matched `long_scroll_to`, which confirms the cap works. The "about 10 screens" scenario was therefore moved to 100 items (7,200 px), just under the cap.
+
+| scenario | distance | path | frames | build avg | build p99 | build worst | missed build |
+|---|---|---|---|---|---|---|---|
+| drag_with_listener | – | default | 2286 / 2288 | 1.34 / 1.34 | 4.23 / 4.20 | 8.07 / 9.49 | 0 / 0 |
+| fixed_drag_with_listener | – | `itemExtent` | 2272 / 2209 | 1.42 / 1.50 | 4.29 / 4.42 | 15.72 / 10.40 | 0 / 0 |
+| short_scroll_to | 12 items | default (direct, in cache) | 795 / 773 | 1.40 / 1.42 | 3.49 / 3.27 | 7.15 / 6.11 | 0 / 0 |
+| fixed_short_scroll_to | 12 items | `itemExtent`, direct | 768 / 775 | 1.42 / 1.42 | 3.28 / 3.24 | 7.04 / 5.91 | 0 / 0 |
+| medium_scroll_to | 40 items, ~3.5 screens | default (crossfade) | 670 / 674 | 3.44 / 3.35 | 62.13 / 63.63 | 74.99 / 74.61 | 11 / 10 |
+| fixed_medium_scroll_to | 40 items | `itemExtent`, direct | 671 / 623 | 2.30 / 2.63 | 6.43 / 7.63 | 10.04 / 16.12 | 0 / 1 |
+| fixed_medium_scroll_to_separated | 40 items | `itemExtent` + `separatorExtent`, direct | 662 / 644 | 2.59 / 2.69 | 8.25 / 11.65 | 19.03 / 14.70 | 1 / 0 |
+| fixed_9_screens_scroll_to | 100 items, ~9 screens | `itemExtent`, direct | 584 / 596 | 3.79 / 3.74 | 14.09 / 12.10 | 22.77 / 17.97 | 3 / 1 |
+| long_scroll_to | 4,900 items | default (crossfade) | 644 / 655 | 3.50 / 3.54 | 61.10 / 59.08 | 67.42 / 83.57 | 12 / 11 |
+| fixed_long_scroll_to | 4,900 items | `itemExtent`, beyond the cap → crossfade | 648 / 666 | 3.56 / 3.39 | 62.92 / 62.95 | 92.10 / 69.15 | 12 / 11 |
+
+What the final numbers show:
+
+- **Medium distance is the win.** At about 3.5 screens, p99 build falls from 62–64 ms to 6–8 ms and missed frames from 10–11 to 0–1. The separated variant behaves the same.
+- **The cap is about right after task 21.** Task 21 cut the crossfade to about 11 missed frames with a roughly 60 ms hitch. At 9 screens the direct path misses 1–3 frames and never goes over 23 ms. The prototype's 20-screen direct run missed 32. So 10 viewports is still on the right side of the crossover.
+- **Beyond the cap, nothing changes:** `fixed_long_scroll_to` matches `long_scroll_to`.
+- **Dragging is unchanged** (within run-to-run noise), as the prototype predicted.
+- **Short scrolls are unchanged:** both paths animate directly.
 
 - **Files:** `lib/src/scrollable_positioned_list.dart` (constructors at lines 40 and 66, `didUpdateWidget` lines 436-480, `_buildList` lines 512-527, `_positionedList` lines 536-566, `_startScroll` lines 640-790 with the direct-vs-transition check at lines 659-674), `lib/src/positioned_list.dart` (`build` lines 171-255, the three `SliverList`s at lines 191, 210 and 229), `README.md`, `CHANGELOG.md`, `example/`.
 - **Wiring after task 21:** `PositionedList` widgets are now cached per list in `_positionedList`, and its cache check compares only `positionedIndex`, `alignment` and `cacheExtent`. `didUpdateWidget` clears both cached lists (lines 468-469), so a changed `itemExtent`/`prototypeItem` still reaches the list without touching the cache check; just pass the new parameters through in the `PositionedList(...)` call. The fixed-extent direct path belongs in the `itemPosition != null` branch's condition at lines 662-674 (direct when within the cap), leaving the crossfade branch untouched.
@@ -21,7 +82,7 @@
     - Padding only matters when `primary.target == 0`: the center sliver then carries the leading padding, so every item sits that much further on. Otherwise the leading padding is at the far end of the leading sliver and lies outside the range of items between the anchor and the target. The trailing padding only affects `maxScrollExtent`, which the clamp already covers.
 - **Acceptance:** new tests for vertical, horizontal, reversed, padding, alignment 0/0.5/1, the last item (clamping) and `shrinkWrap`. They check the final positions and that `_isTransitioning` never becomes true (or, with the recommended distance cap, never becomes true below the cap). Existing tests pass unchanged, since the default path is untouched. Benchmark numbers for "long `scrollTo`" and "drag" with and without `itemExtent` are recorded here. README and changelog document the new parameters.
 
-## Measurements
+## Prototype measurements (before the owner decisions)
 
 **Prototype** (throwaway, not committed):
 - `.builder` gets `itemExtent`, and `PositionedList` uses `SliverFixedExtentList` for all three slivers when it's set.
@@ -79,7 +140,7 @@ Do the task, but narrower than the original pitch. The value is exact, crossfade
 
 **Note for the owner:** [task 18](18-default-cache-extent.md) option 2 ("estimate nearby targets") would bring direct medium-distance scrolls to *all* lists, with a possible end-of-scroll correction for variable heights. This task is the exact version of the same idea for fixed-height lists. The two don't conflict.
 
-**Decisions needed from the owner:**
+**Decisions needed from the owner** (answered on 2026-11-10; see [Owner decisions](#owner-decisions-2026-11-10)):
 
 - (a) API: `itemExtent` + `prototypeItem` on `.builder` only, as above? Or `itemExtent` only for a first version?
 - (b) `.separated`: unsupported for now (recommended), or add `separatorExtent` now?

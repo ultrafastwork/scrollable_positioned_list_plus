@@ -5,6 +5,8 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
@@ -17,6 +19,12 @@ import 'scroll_offset_notifier.dart';
 
 /// Number of screens to scroll when scrolling a long distance.
 const int _screenScrollCount = 2;
+
+/// With a fixed item extent, the farthest `scrollTo` target, in viewports,
+/// that is animated directly instead of crossfading. Measured on a device
+/// (task 20): beyond about 10 viewports, building a new screen of items on
+/// every frame costs more than the crossfade.
+const int _maxDirectScrollScreens = 10;
 
 /// A scrollable list of widgets similar to [ListView], except scroll control
 /// and position reporting is based on index rather than pixel offset.
@@ -57,9 +65,16 @@ class ScrollablePositionedList extends StatefulWidget {
     this.addAutomaticKeepAlives = true,
     this.addRepaintBoundaries = true,
     this.minCacheExtent,
-  }) : itemPositionsNotifier = itemPositionsListener as ItemPositionsNotifier?,
+    this.itemExtent,
+    this.prototypeItem,
+  }) : assert(
+         itemExtent == null || prototypeItem == null,
+         'You can only pass itemExtent or prototypeItem, not both.',
+       ),
+       itemPositionsNotifier = itemPositionsListener as ItemPositionsNotifier?,
        scrollOffsetNotifier = scrollOffsetListener as ScrollOffsetNotifier?,
-       separatorBuilder = null;
+       separatorBuilder = null,
+       separatorExtent = null;
 
   /// Create a [ScrollablePositionedList] whose items are provided by
   /// [itemBuilder] and separators provided by [separatorBuilder].
@@ -84,9 +99,16 @@ class ScrollablePositionedList extends StatefulWidget {
     this.addAutomaticKeepAlives = true,
     this.addRepaintBoundaries = true,
     this.minCacheExtent,
+    this.itemExtent,
+    this.separatorExtent,
   }) : assert(separatorBuilder != null),
+       assert(
+         (itemExtent == null) == (separatorExtent == null),
+         'Pass both itemExtent and separatorExtent, or neither.',
+       ),
        itemPositionsNotifier = itemPositionsListener as ItemPositionsNotifier?,
-       scrollOffsetNotifier = scrollOffsetListener as ScrollOffsetNotifier?;
+       scrollOffsetNotifier = scrollOffsetListener as ScrollOffsetNotifier?,
+       prototypeItem = null;
 
   /// Number of items the [itemBuilder] can produce.
   final int itemCount;
@@ -180,6 +202,30 @@ class ScrollablePositionedList extends StatefulWidget {
   /// in builds of widgets that would otherwise already be built in the
   /// cache extent.
   final double? minCacheExtent;
+
+  /// If non-null, forces every item to have this extent in the scroll
+  /// direction, like [ListView.itemExtent].
+  ///
+  /// The offset of every item is then known without building it, so
+  /// [ItemScrollController.scrollTo] animates straight to targets up to about
+  /// ten viewports away and lands exactly, instead of crossfading to a second
+  /// list. Farther targets still crossfade.
+  ///
+  /// With [ScrollablePositionedList.separated], [separatorExtent] must be
+  /// given too.
+  final double? itemExtent;
+
+  /// If non-null, forces every item to have the same extent as this widget in
+  /// the scroll direction, like [ListView.prototypeItem]. The prototype is
+  /// laid out but never shown.
+  ///
+  /// Has the same effect on [ItemScrollController.scrollTo] as [itemExtent].
+  /// Only [ScrollablePositionedList.builder] supports it.
+  final Widget? prototypeItem;
+
+  /// The extent of every separator in the scroll direction, for
+  /// [ScrollablePositionedList.separated] with an [itemExtent].
+  final double? separatorExtent;
 
   @override
   State<StatefulWidget> createState() => _ScrollablePositionedListState();
@@ -562,6 +608,44 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
       padding: widget.padding,
       addAutomaticKeepAlives: widget.addAutomaticKeepAlives,
       addRepaintBoundaries: widget.addRepaintBoundaries,
+      itemExtent: widget.itemExtent,
+      prototypeItem: widget.prototypeItem,
+      separatorExtent: widget.separatorExtent,
+      centerKey: _hasFixedExtent ? details.centerKey : null,
+    );
+  }
+
+  bool get _hasFixedExtent =>
+      widget.itemExtent != null || widget.prototypeItem != null;
+
+  /// For a fixed-extent list, the [primary] scroll offset that puts the
+  /// leading edge of the item at [index] at [alignment], clamped to the scroll
+  /// range. Null if the list has no fixed extent or isn't laid out.
+  ///
+  /// At offset 0 the leading edge of the center sliver (item [primary]'s
+  /// target, plus any padding before it) is at [primary]'s alignment, and every
+  /// item after or before it is a whole number of strides away.
+  double? _fixedExtentScrollOffset(int index, double alignment) {
+    if (!_hasFixedExtent) return null;
+    final center = primary.centerKey.currentContext?.findRenderObject();
+    if (center is! RenderSliverPadding || center.geometry == null) return null;
+    final sliver = center.child;
+    if (sliver is! RenderSliverFixedExtentBoxAdaptor) return null;
+    final itemExtent = widget.itemExtent ?? sliver.itemExtent;
+    if (itemExtent == null) return null;
+    final stride = itemExtent + (widget.separatorExtent ?? 0);
+    final position = primary.scrollController.position;
+    if (!position.hasContentDimensions || !position.hasViewportDimension) {
+      return null;
+    }
+    final offset =
+        (index - primary.target) * stride +
+        center.beforePadding +
+        (primary.alignment - alignment) * position.viewportDimension;
+    return clampDouble(
+      offset,
+      position.minScrollExtent,
+      position.maxScrollExtent,
     );
   }
 
@@ -659,15 +743,24 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
     final itemPosition = primary.itemPositionsNotifier.itemPositions.value
         .where((itemPosition) => itemPosition.index == index)
         .firstOrNull;
-    if (itemPosition != null) {
+    // With a fixed extent the target offset is known even for items that
+    // aren't built, so animate directly as long as the distance is short
+    // enough for that to stay smooth.
+    var fixedOffset = _fixedExtentScrollOffset(index, alignment);
+    if (fixedOffset != null &&
+        (fixedOffset - primary.scrollController.offset).abs() >
+            _maxDirectScrollScreens *
+                primary.scrollController.position.viewportDimension) {
+      fixedOffset = null;
+    }
+    if (fixedOffset != null || itemPosition != null) {
       // Scroll directly.
-      final localScrollAmount =
-          itemPosition.itemLeadingEdge *
-          primary.scrollController.position.viewportDimension;
       await primary.scrollController.animateTo(
-        primary.scrollController.offset +
-            localScrollAmount -
-            alignment * primary.scrollController.position.viewportDimension,
+        fixedOffset ??
+            primary.scrollController.offset +
+                itemPosition!.itemLeadingEdge *
+                    primary.scrollController.position.viewportDimension -
+                alignment * primary.scrollController.position.viewportDimension,
         duration: duration,
         curve: curve,
       );
@@ -859,6 +952,10 @@ class _ListDisplayDetails {
   PositionedList? list;
 
   final Key key;
+
+  /// Key of the list's center sliver, used in fixed-extent mode to read the
+  /// item extent and leading padding from its render object.
+  final centerKey = GlobalKey();
 }
 
 /// A [ScrollController] whose next position starts at [nextInitialOffset].

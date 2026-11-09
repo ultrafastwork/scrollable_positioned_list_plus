@@ -88,6 +88,44 @@ One can monitor what items are visible on screen with:
 itemPositionsListener.itemPositions.addListener(() => ...);
 ```
 
+### Fixed-height items
+
+If every item has the same height (or width, for a horizontal list), say so
+with `itemExtent` or `prototypeItem`, as with `ListView`:
+
+```dart
+ScrollablePositionedList.builder(
+  itemCount: 500,
+  itemBuilder: (context, index) => ListTile(title: Text('Item $index')),
+  itemExtent: 72,
+  // or: prototypeItem: const ListTile(title: Text('Item')),
+  itemScrollController: itemScrollController,
+);
+```
+
+For a separated list, give the separator's extent too:
+
+```dart
+ScrollablePositionedList.separated(
+  itemCount: 500,
+  itemBuilder: (context, index) => ListTile(title: Text('Item $index')),
+  separatorBuilder: (context, index) => const Divider(height: 1),
+  itemExtent: 72,
+  separatorExtent: 1,
+  itemScrollController: itemScrollController,
+);
+```
+
+Items are then forced to that extent, and `scrollTo` knows where every item is
+without building it. A target up to about ten screens away is reached with
+one smooth, exact animation instead of the crossfade between two lists that
+`scrollTo` otherwise uses for items that aren't already built. Farther targets
+still crossfade, because animating straight past thousands of items costs
+more per frame than the crossfade does.
+
+`.separated` supports `itemExtent` with `separatorExtent`, but not
+`prototypeItem`.
+
 ### Experimental APIs (subject to bugs and changes)
 
 Changes in scroll position can be monitored with:

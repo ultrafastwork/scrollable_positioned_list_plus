@@ -28,14 +28,23 @@ const _scrollToDuration = Duration(milliseconds: 600);
 
 final _listFinder = find.byType(ScrollablePositionedList);
 
+/// The `ListTile`s below are 72 px tall anyway, so passing this as
+/// `itemExtent` changes how the list is laid out and scrolled, not what it
+/// shows.
+const _fixedItemExtent = 72.0;
+
 class _PerfList extends StatelessWidget {
   const _PerfList({
     required this.separated,
+    required this.fixed,
     required this.itemScrollController,
     this.itemPositionsListener,
   });
 
   final bool separated;
+
+  /// Whether to pass `itemExtent` (and `separatorExtent`).
+  final bool fixed;
   final ItemScrollController itemScrollController;
   final ItemPositionsListener? itemPositionsListener;
 
@@ -60,12 +69,15 @@ class _PerfList extends StatelessWidget {
                       const Divider(height: 1),
                   itemScrollController: itemScrollController,
                   itemPositionsListener: itemPositionsListener,
+                  itemExtent: fixed ? _fixedItemExtent : null,
+                  separatorExtent: fixed ? 1 : null,
                 )
               : ScrollablePositionedList.builder(
                   itemCount: _itemCount,
                   itemBuilder: _item,
                   itemScrollController: itemScrollController,
                   itemPositionsListener: itemPositionsListener,
+                  itemExtent: fixed ? _fixedItemExtent : null,
                 ),
         ),
       ),
@@ -78,6 +90,7 @@ Future<ItemScrollController> _pumpList(
   WidgetTester tester, {
   required bool separated,
   required bool withListener,
+  bool fixed = false,
 }) async {
   final controller = ItemScrollController();
   ItemPositionsListener? listener;
@@ -89,7 +102,8 @@ Future<ItemScrollController> _pumpList(
     listener.itemPositions.addListener(() {
       var min = -1;
       for (final position in listener!.itemPositions.value) {
-        if (position.itemTrailingEdge > 0 && (min < 0 || position.index < min)) {
+        if (position.itemTrailingEdge > 0 &&
+            (min < 0 || position.index < min)) {
           min = position.index;
         }
       }
@@ -99,6 +113,7 @@ Future<ItemScrollController> _pumpList(
   await tester.pumpWidget(
     _PerfList(
       separated: separated,
+      fixed: fixed,
       itemScrollController: controller,
       itemPositionsListener: listener,
     ),
@@ -206,4 +221,63 @@ void main() {
       reportKey: 'short_scroll_to',
     );
   });
+
+  // About 3.5 screens: too far for the default path's cache, so it crossfades.
+  testWidgets('medium scrollTo', (tester) async {
+    final controller = await _pumpList(
+      tester,
+      separated: false,
+      withListener: true,
+    );
+    await _scrollBetween(controller, tester, from: 100, to: 140, rounds: 2);
+    await binding.watchPerformance(
+      () => _scrollBetween(
+        controller,
+        tester,
+        from: 100,
+        to: 140,
+        rounds: _scrollToRounds,
+      ),
+      reportKey: 'medium_scroll_to',
+    );
+  });
+
+  // Fixed-extent mode (task 20). `scrollTo` animates directly up to about 10
+  // screens and crossfades beyond that.
+  testWidgets('fixed drag with listener', (tester) async {
+    await _pumpList(tester, separated: false, withListener: true, fixed: true);
+    await _dragAndFling(tester, rounds: 1); // warm-up
+    await binding.watchPerformance(
+      () => _dragAndFling(tester, rounds: _dragRounds),
+      reportKey: 'fixed_drag_with_listener',
+    );
+  });
+
+  for (final (name, to, separated) in [
+    ('fixed_short_scroll_to', 112, false),
+    ('fixed_medium_scroll_to', 140, false),
+    ('fixed_medium_scroll_to_separated', 140, true),
+    ('fixed_9_screens_scroll_to', 200, false), // just under the 10-screen cap
+    ('fixed_long_scroll_to', 5000, false),
+  ]) {
+    testWidgets(name, (tester) async {
+      final controller = await _pumpList(
+        tester,
+        separated: separated,
+        withListener: true,
+        fixed: true,
+      );
+      await _scrollBetween(controller, tester, from: 100, to: to, rounds: 2);
+      await binding.watchPerformance(
+        () => _scrollBetween(
+          controller,
+          tester,
+          from: 100,
+          to: to,
+          rounds: _scrollToRounds,
+        ),
+        reportKey: name,
+      );
+    });
+  }
 }

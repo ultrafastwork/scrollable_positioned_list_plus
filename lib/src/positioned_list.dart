@@ -6,6 +6,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
+import 'alternating_extent_list.dart';
 import 'element_registry.dart';
 import 'item_positions_listener.dart';
 import 'item_positions_notifier.dart';
@@ -43,7 +44,16 @@ class PositionedList extends StatefulWidget {
     this.addSemanticIndexes = true,
     this.addRepaintBoundaries = true,
     this.addAutomaticKeepAlives = true,
-  }) : assert((positionedIndex == 0) || (positionedIndex < itemCount));
+    this.itemExtent,
+    this.prototypeItem,
+    this.separatorExtent,
+    this.centerKey,
+  }) : assert((positionedIndex == 0) || (positionedIndex < itemCount)),
+       assert(itemExtent == null || prototypeItem == null),
+       assert(
+         separatorExtent == null ||
+             (itemExtent != null && separatorBuilder != null),
+       );
 
   /// Number of items the [itemBuilder] can produce.
   final int itemCount;
@@ -129,6 +139,25 @@ class PositionedList extends StatefulWidget {
   /// See [SliverChildBuilderDelegate.addAutomaticKeepAlives].
   final bool addAutomaticKeepAlives;
 
+  /// If non-null, every item has this extent in the scroll direction.
+  ///
+  /// See [ListView.itemExtent].
+  final double? itemExtent;
+
+  /// If non-null, every item has the extent of this widget in the scroll
+  /// direction.
+  ///
+  /// See [ListView.prototypeItem].
+  final Widget? prototypeItem;
+
+  /// If non-null (only with [separatorBuilder] and [itemExtent]), every
+  /// separator has this extent in the scroll direction.
+  final double? separatorExtent;
+
+  /// Key for the center sliver (a [SliverPadding]), so its render object can
+  /// be found. If null, a private key is used.
+  final Key? centerKey;
+
   @override
   State<StatefulWidget> createState() => _PositionedListState();
 }
@@ -172,7 +201,7 @@ class _PositionedListState extends State<PositionedList> {
     elementNotifier: registeredElements,
     child: UnboundedCustomScrollView(
       anchor: widget.alignment,
-      center: _centerKey,
+      center: widget.centerKey ?? _centerKey,
       controller: scrollController,
       scrollDirection: widget.scrollDirection,
       reverse: widget.reverse,
@@ -188,7 +217,9 @@ class _PositionedListState extends State<PositionedList> {
           SliverPadding(
             key: ValueKey((#leading, widget.positionedIndex)),
             padding: _leadingSliverPadding,
-            sliver: SliverList(
+            // Built in reverse: odd children are items, even ones separators.
+            sliver: _sliver(
+              itemsAreOdd: true,
               delegate: SliverChildBuilderDelegate(
                 (context, index) => widget.separatorBuilder == null
                     ? _buildItem(widget.positionedIndex - (index + 1))
@@ -205,9 +236,10 @@ class _PositionedListState extends State<PositionedList> {
             ),
           ),
         SliverPadding(
-          key: _centerKey,
+          key: widget.centerKey ?? _centerKey,
           padding: _centerSliverPadding,
-          sliver: SliverList(
+          sliver: _sliver(
+            itemsAreOdd: false,
             delegate: SliverChildBuilderDelegate(
               (context, index) => widget.separatorBuilder == null
                   ? _buildItem(index + widget.positionedIndex)
@@ -226,7 +258,9 @@ class _PositionedListState extends State<PositionedList> {
           SliverPadding(
             key: ValueKey((#trailing, widget.positionedIndex)),
             padding: _trailingSliverPadding,
-            sliver: SliverList(
+            // Starts with the separator after the center item.
+            sliver: _sliver(
+              itemsAreOdd: true,
               delegate: SliverChildBuilderDelegate(
                 (context, index) => widget.separatorBuilder == null
                     ? _buildItem(index + widget.positionedIndex + 1)
@@ -245,6 +279,37 @@ class _PositionedListState extends State<PositionedList> {
       ],
     ),
   );
+
+  /// The sliver for one of the three parts of the list: fixed-extent when an
+  /// extent is given, otherwise a plain [SliverList].
+  ///
+  /// [itemsAreOdd] says whether, with separators, the items are this sliver's
+  /// odd children (and the separators its even ones) or the other way round.
+  Widget _sliver({
+    required SliverChildDelegate delegate,
+    required bool itemsAreOdd,
+  }) {
+    final itemExtent = widget.itemExtent;
+    final separatorExtent = widget.separatorExtent;
+    final prototypeItem = widget.prototypeItem;
+    if (itemExtent != null && separatorExtent != null) {
+      return SliverAlternatingExtentList(
+        delegate: delegate,
+        evenExtent: itemsAreOdd ? separatorExtent : itemExtent,
+        oddExtent: itemsAreOdd ? itemExtent : separatorExtent,
+      );
+    }
+    if (itemExtent != null) {
+      return SliverFixedExtentList(delegate: delegate, itemExtent: itemExtent);
+    }
+    if (prototypeItem != null) {
+      return SliverPrototypeExtentList(
+        delegate: delegate,
+        prototypeItem: prototypeItem,
+      );
+    }
+    return SliverList(delegate: delegate);
+  }
 
   Widget _buildSeparatedListElement(int index) {
     if (index.isEven) {
