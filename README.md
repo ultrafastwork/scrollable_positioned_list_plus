@@ -29,7 +29,7 @@ The API is the same. Replace the dependency in your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  scrollable_positioned_list_plus: ^0.4.0
+  scrollable_positioned_list_plus: ^0.5.0
 ```
 
 and update your imports:
@@ -41,6 +41,10 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 // After
 import 'package:scrollable_positioned_list_plus/scrollable_positioned_list_plus.dart';
 ```
+
+One default differs: since 0.5.0 the list builds 250 pixels of off-screen
+items on each side, like `ListView`, instead of two screens. See
+[Cache extent](#cache-extent).
 
 ## Usage
 
@@ -125,6 +129,25 @@ more per frame than the crossfade does.
 
 `.separated` supports `itemExtent` with `separatorExtent`, but not
 `prototypeItem`.
+
+### Cache extent
+
+Like `ListView`, the list builds items up to 250 pixels beyond each edge of
+the viewport. Without a fixed item extent, `scrollTo` animates directly only
+to an item that is already built; for any other target it crossfades. Set
+`cacheExtent` to change the distance:
+
+```dart
+ScrollablePositionedList.builder(
+  itemCount: 500,
+  itemBuilder: (context, index) => Text('Item $index'),
+  // Two screens, as before 0.5.0: more scrollTo calls animate directly, but
+  // every frame builds and lays out more off-screen items.
+  cacheExtent: 2 * MediaQuery.sizeOf(context).height,
+);
+```
+
+`minCacheExtent` still works and acts as a lower bound.
 
 ### Experimental APIs (subject to bugs and changes)
 

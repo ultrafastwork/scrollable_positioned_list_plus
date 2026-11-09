@@ -65,6 +65,7 @@ class ScrollablePositionedList extends StatefulWidget {
     this.addAutomaticKeepAlives = true,
     this.addRepaintBoundaries = true,
     this.minCacheExtent,
+    this.cacheExtent,
     this.itemExtent,
     this.prototypeItem,
   }) : assert(
@@ -99,6 +100,7 @@ class ScrollablePositionedList extends StatefulWidget {
     this.addAutomaticKeepAlives = true,
     this.addRepaintBoundaries = true,
     this.minCacheExtent,
+    this.cacheExtent,
     this.itemExtent,
     this.separatorExtent,
   }) : assert(separatorBuilder != null),
@@ -202,6 +204,23 @@ class ScrollablePositionedList extends StatefulWidget {
   /// in builds of widgets that would otherwise already be built in the
   /// cache extent.
   final double? minCacheExtent;
+
+  /// The cache extent, in logical pixels, on each side of the viewport: items
+  /// this far off screen are built and laid out before they become visible.
+  /// See [ScrollView.scrollCacheExtent].
+  ///
+  /// Defaults to [RenderAbstractViewport.defaultCacheExtent] (250 pixels), the
+  /// same as [ListView]. Unlike [minCacheExtent], this can lower the cache as
+  /// well as raise it; [minCacheExtent], if given, is still a lower bound.
+  ///
+  /// Without a fixed item extent ([itemExtent] or [prototypeItem]),
+  /// [ItemScrollController.scrollTo] animates directly only to items that are
+  /// already built, which means inside this cache extent; farther targets
+  /// crossfade to a second list. A larger value lets more `scrollTo` calls
+  /// animate directly, at the cost of building more off-screen items on every
+  /// frame. Before 0.5.0 the cache was twice the viewport extent; pass that to
+  /// get the old behaviour back.
+  final double? cacheExtent;
 
   /// If non-null, forces every item to have this extent in the scroll
   /// direction, like [ListView.itemExtent].
@@ -527,31 +546,27 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final cacheExtent = _cacheExtent(constraints);
-        return Listener(
-          onPointerDown: (_) => _stopScroll(canceled: true),
-          child: Stack(
-            children: <Widget>[
-              _buildList(
-                primary,
-                opacity: _primaryOpacity,
-                cacheExtent: cacheExtent,
-                // Swallow the primary's notifications while transitioning.
-                onNotification: (_) => _isTransitioning,
-              ),
-              if (_isTransitioning)
-                _buildList(
-                  secondary,
-                  opacity: opacity,
-                  cacheExtent: cacheExtent,
-                  onNotification: (_) => false,
-                ),
-            ],
+    final cacheExtent = _cacheExtent;
+    return Listener(
+      onPointerDown: (_) => _stopScroll(canceled: true),
+      child: Stack(
+        children: <Widget>[
+          _buildList(
+            primary,
+            opacity: _primaryOpacity,
+            cacheExtent: cacheExtent,
+            // Swallow the primary's notifications while transitioning.
+            onNotification: (_) => _isTransitioning,
           ),
-        );
-      },
+          if (_isTransitioning)
+            _buildList(
+              secondary,
+              opacity: opacity,
+              cacheExtent: cacheExtent,
+              onNotification: (_) => false,
+            ),
+        ],
+      ),
     );
   }
 
@@ -649,11 +664,8 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
     );
   }
 
-  double _cacheExtent(BoxConstraints constraints) => max(
-    (widget.scrollDirection == Axis.vertical
-            ? constraints.maxHeight
-            : constraints.maxWidth) *
-        _screenScrollCount,
+  double get _cacheExtent => max(
+    widget.cacheExtent ?? RenderAbstractViewport.defaultCacheExtent,
     widget.minCacheExtent ?? 0,
   );
 

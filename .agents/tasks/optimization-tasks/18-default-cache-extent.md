@@ -1,8 +1,13 @@
-# 18. Shrink the default cache extent — NEEDS OWNER DECISION
+# 18. Shrink the default cache extent — owner decided: option 1, default 250 px, 0.5.0
 
 **Area:** performance · **Line numbers:** `fddbc8c`
 
-**Status:** blocked on owner decision. Measurements are done (below) and show a clear gain. No code has changed. Pick an option under [Recommendation](#recommendation) to unblock. (Re-checked on `fddbc8c`: still no decision recorded; line numbers refreshed after task 21.)
+**Status:** done. New nullable `cacheExtent` on both constructors; the default is `RenderAbstractViewport.defaultCacheExtent` (250 px), and `minCacheExtent` is still a floor. Released as `0.5.0` (changelog and README updated). On device, on top of tasks 20 and 21: build time while dragging is about 20 % lower and long `scrollTo` p99 build time drops from 51–64 ms to 20–36 ms. See [Result](#result).
+
+## Owner decision (2026-11-10)
+
+- (a) **Option 1 as recommended:** add `cacheExtent` and change the default to the framework's 250 px.
+- (b) **Version `0.5.0`**: the "Unreleased" changelog items move under it.
 
 - **Files:** `lib/src/scrollable_positioned_list.dart`: `_screenScrollCount` (line 19), `minCacheExtent` (constructors at lines 59 and 86, field at line 182), `_cacheExtent` (lines 568-574), `_positionedList` (lines 536-566), the direct-vs-transition check in `_startScroll` (lines 659-674).
 - **Wiring after task 21:** `_cacheExtent` is computed in `build` (line 486) and passed into `_positionedList`, whose cache check already compares `cacheExtent` (line 544). A new `cacheExtent` parameter only has to feed `_cacheExtent`; no `didUpdateWidget` change is needed for it to reach the list. `_screenScrollCount` is also the crossfade's jump distance (lines 675-677, 698-700). That's independent of the cache size, so it can stay as it is.
@@ -80,7 +85,44 @@ The gain is large enough that the task shouldn't be closed as "not worth it". Th
 
 **Alternative if no behaviour change is acceptable right now:** do only step 1 and keep today's default, so the change is purely additive and apps opt in. Then flip the default in a later breaking release. Most users would get none of the gain until then.
 
-**Decisions needed from the owner:**
+**Decisions needed from the owner:** answered, see [Owner decision](#owner-decision-2026-11-10).
 
-- (a) Option 1 as above, option 1 with no default change, or option 2.
-- (b) If the default changes, whether `0.5.0` is the right version.
+## Result
+
+**What changed** (`lib/src/scrollable_positioned_list.dart`):
+
+- `cacheExtent` field and constructor parameter on `.builder` and `.separated`.
+- `_cacheExtent` is `max(cacheExtent ?? 250, minCacheExtent ?? 0)`. It no longer depends on the viewport size, so the `LayoutBuilder` that wrapped `build` (used only for this) is gone.
+- `_screenScrollCount` stays, because it's still the crossfade's jump distance.
+
+**Tests:** 248 passed, 0 skipped (the 244 baseline plus 4 new tests). `flutter analyze` reports no issues.
+
+- `Scroll to 20 without fading` (vertical and horizontal) and `Scroll to 20 without fading small minCacheExtent` now pass `cacheExtent: 2 × viewport`, so they still cover the direct path. The last one also checks that a small `minCacheExtent` doesn't lower the cache.
+- The new tests cover the 250 px default (item 16 is built and item 17 isn't), `cacheExtent: 0` lowering the cache, `minCacheExtent` raising a smaller `cacheExtent`, and `Scroll to 20` crossfading with the default.
+
+**Device numbers:** Redmi Note 15, Flutter 3.47.7, profile mode. Both sides were built from the same tree: "before" is `9a5b746` with `lib/` stashed, "after" is this change. Two runs per side, shown as run 1 / run 2. Times are in ms.
+
+| scenario | frames before | frames after | build avg before | build avg after | build p99 before | build p99 after | build worst before | build worst after | missed build before | missed build after |
+|---|---|---|---|---|---|---|---|---|---|---|
+| drag_with_listener | 2321 / 2300 | 2531 / 2497 | 1.27 / 1.34 | 0.99 / 1.11 | 4.12 / 4.34 | 3.59 / 3.98 | 10.09 / 6.07 | 7.04 / 6.45 | 0 / 0 | 0 / 0 |
+| drag_with_listener_separated | 2276 / 2308 | 2514 / 2505 | 1.48 / 1.45 | 1.16 / 1.23 | 4.71 / 4.65 | 4.09 / 4.30 | 8.13 / 7.04 | 6.23 / 5.42 | 0 / 0 | 0 / 0 |
+| drag_without_listener | 2283 / 2268 | 2520 / 2505 | 1.41 / 1.44 | 1.11 / 1.14 | 4.36 / 4.40 | 3.78 / 4.10 | 8.21 / 14.16 | 8.81 / 8.94 | 0 / 0 | 0 / 0 |
+| short_scroll_to | 792 / 786 | 836 / 843 | 1.34 / 1.40 | 1.13 / 1.14 | 3.22 / 3.50 | 3.36 / 2.96 | 6.99 / 6.97 | 6.21 / 6.70 | 0 / 0 | 0 / 0 |
+| medium_scroll_to | 700 / 684 | 794 / 763 | 3.11 / 3.29 | 2.29 / 2.55 | 53.89 / 60.57 | 32.85 / 36.72 | 68.95 / 68.74 | 49.52 / 55.02 | 12 / 12 | 10 / 10 |
+| long_scroll_to | 684 / 659 | 752 / 724 | 3.18 / 3.50 | 2.61 / 2.93 | 59.11 / 59.15 | 26.38 / 35.97 | 64.42 / 86.24 | 46.19 / 58.86 | 10 / 12 | 10 / 10 |
+| long_scroll_to_separated | 657 / 635 | 775 / 720 | 3.61 / 3.88 | 2.69 / 3.06 | 58.53 / 63.63 | 31.75 / 35.38 | 72.33 / 72.09 | 64.11 / 55.95 | 12 / 12 | 11 / 10 |
+| fixed_drag_with_listener | 2313 / 2272 | 2519 / 2515 | 1.36 / 1.42 | 1.09 / 1.13 | 4.20 / 4.37 | 3.77 / 3.96 | 8.13 / 7.95 | 4.66 / 12.28 | 0 / 0 | 0 / 0 |
+| fixed_short_scroll_to | 774 / 793 | 843 / 831 | 1.39 / 1.35 | 1.10 / 1.14 | 3.22 / 3.19 | 2.65 / 2.80 | 4.48 / 5.20 | 7.65 / 5.29 | 0 / 0 | 0 / 0 |
+| fixed_medium_scroll_to | 659 / 705 | 834 / 822 | 2.33 / 2.25 | 1.74 / 1.81 | 6.59 / 6.79 | 5.38 / 4.84 | 16.47 / 9.81 | 11.88 / 11.13 | 1 / 0 | 0 / 0 |
+| fixed_medium_scroll_to_separated | 667 / 632 | 829 / 821 | 2.50 / 2.62 | 1.89 / 1.92 | 8.66 / 7.20 | 4.55 / 4.76 | 15.93 / 12.62 | 16.39 / 11.41 | 0 / 0 | 1 / 0 |
+| fixed_9_screens_scroll_to | 605 / 612 | 576 / 588 | 3.49 / 3.68 | 4.46 / 4.42 | 12.11 / 14.95 | 11.50 / 11.96 | 20.61 / 25.57 | 19.93 / 19.72 | 3 / 5 | 4 / 2 |
+| fixed_long_scroll_to | 672 / 639 | 749 / 753 | 3.00 / 3.47 | 2.56 / 2.65 | 51.20 / 58.12 | 26.63 / 20.31 | 72.25 / 69.86 | 35.38 / 38.22 | 10 / 14 | 10 / 11 |
+
+**Raster:** the average went from 2.9–3.8 ms to 3.1–4.2 ms. It's a little higher in the `scrollTo` scenarios, partly because more frames now fall inside the measured window. p99 raster is roughly flat, and missed raster frames fell from 0–4 to 0–1 per scenario. The raw output is in each run's `example/build/perf/` summaries (not committed).
+
+**What the numbers show:**
+
+- **Dragging:** average build time is down about 20 % in every drag scenario, fixed-extent included, and about 9 % more frames are delivered in the same time (about 2,300 → 2,500).
+- **Crossfading `scrollTo`** (`medium`, `long`, `fixed_long`): p99 build time drops from 51–64 ms to 20–37 ms and the worst frame by about 10–50 %. Missed build frames drop slightly, from 10–14 to 10–11. `medium_scroll_to` (about 3.5 screens) crossfaded before too, so it shows the gain rather than the cost of this change. The README's earlier note that it would show the cost was wrong.
+- **Fixed-extent direct `scrollTo`:** `fixed_medium` improves (avg 2.3 → 1.8 ms, p99 6.6–6.8 → 4.8–5.4 ms). `fixed_9_screens_scroll_to` is the one scenario where average build is higher (3.5–3.7 → 4.4–4.5 ms) with slightly fewer frames, but p99, worst frame and missed frames are unchanged or better. That's acceptable, but worth watching if someone tunes `_maxDirectScrollScreens`.
+- **Not measured:** the behaviour change itself. A target 0.3–2 screens past the viewport used to animate directly and now crossfades. No harness scenario covers that range, because `short_scroll_to` stays inside the cache and `medium_scroll_to` was already past it. Expect its per-scroll cost to look like the "after" `medium_scroll_to` row. Option 2 (estimate nearby targets) is still open as a possible follow-up task.

@@ -22,6 +22,7 @@ void main() {
     bool reverse = false,
     EdgeInsets? padding,
     int initialScrollIndex = 0,
+    double? cacheExtent,
   }) async {
     tester.view.devicePixelRatio = 1.0;
     tester.view.physicalSize = const Size(screenWidth, screenHeight);
@@ -38,6 +39,7 @@ void main() {
           reverse: reverse,
           padding: padding,
           initialScrollIndex: initialScrollIndex,
+          cacheExtent: cacheExtent,
         ),
       ),
     );
@@ -233,6 +235,8 @@ void main() {
       tester,
       itemScrollController: itemScrollController,
       itemPositionsListener: itemPositionsListener,
+      // Item 20 is built only with a cache of at least two screens.
+      cacheExtent: 2 * screenWidth,
     );
 
     var fadeTransition = tester.widget<FadeTransition>(fadeTransitionFinder);

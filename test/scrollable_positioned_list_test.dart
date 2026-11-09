@@ -36,6 +36,7 @@ void main() {
     bool addRepaintBoundaries = true,
     bool addAutomaticKeepAlives = true,
     double? minCacheExtent,
+    double? cacheExtent,
     bool variableHeight = false,
   }) async {
     tester.view.devicePixelRatio = 1.0;
@@ -66,6 +67,7 @@ void main() {
           addAutomaticKeepAlives: addAutomaticKeepAlives,
           addRepaintBoundaries: addRepaintBoundaries,
           minCacheExtent: minCacheExtent,
+          cacheExtent: cacheExtent,
         ),
       ),
     );
@@ -463,6 +465,8 @@ void main() {
       tester,
       itemScrollController: itemScrollController,
       itemPositionsListener: itemPositionsListener,
+      // Item 20 is built only with a cache of at least two screens.
+      cacheExtent: 2 * screenHeight,
     );
 
     var fadeTransition = tester.widget<FadeTransition>(fadeTransitionFinder);
@@ -2178,7 +2182,9 @@ void main() {
       tester,
       itemScrollController: itemScrollController,
       itemPositionsListener: itemPositionsListener,
+      // A small minCacheExtent is only a floor; it doesn't lower cacheExtent.
       minCacheExtent: 10,
+      cacheExtent: 2 * screenHeight,
     );
 
     var fadeTransition = tester.widget<FadeTransition>(fadeTransitionFinder);
@@ -2198,6 +2204,58 @@ void main() {
 
     expect(find.text('Item 14'), findsNothing);
     expect(find.text('Item 20'), findsOneWidget);
+  });
+
+  testWidgets('Default cache extent is the framework default', (
+    WidgetTester tester,
+  ) async {
+    await setUpWidgetTest(tester);
+
+    // 250 px past a 400 px viewport of 40 px items reaches into item 16.
+    expect(find.text('Item 16', skipOffstage: false), findsOneWidget);
+    expect(find.text('Item 17', skipOffstage: false), findsNothing);
+  });
+
+  testWidgets('cacheExtent can lower the cache', (WidgetTester tester) async {
+    await setUpWidgetTest(tester, cacheExtent: 0);
+
+    expect(find.text('Item 9'), findsOneWidget);
+    expect(find.text('Item 10', skipOffstage: false), findsNothing);
+  });
+
+  testWidgets('minCacheExtent raises a smaller cacheExtent', (
+    WidgetTester tester,
+  ) async {
+    await setUpWidgetTest(
+      tester,
+      cacheExtent: 0,
+      minCacheExtent: 2 * itemHeight,
+    );
+
+    expect(find.text('Item 11', skipOffstage: false), findsOneWidget);
+    expect(find.text('Item 12', skipOffstage: false), findsNothing);
+  });
+
+  testWidgets('Scroll to 20 fades with the default cache extent', (
+    WidgetTester tester,
+  ) async {
+    final itemScrollController = ItemScrollController();
+    await setUpWidgetTest(tester, itemScrollController: itemScrollController);
+
+    unawaited(
+      itemScrollController.scrollTo(index: 20, duration: scrollDuration),
+    );
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(scrollDuration ~/ 2);
+
+    // Item 20 was outside the default cache, so scrollTo crossfades.
+    expect(fadeTransitionFinder, findsNWidgets(2));
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Item 14'), findsNothing);
+    expect(tester.getTopLeft(find.text('Item 20')).dy, 0);
   });
 
   testWidgets('Scroll to 100 without fading for large minCacheExtent', (
