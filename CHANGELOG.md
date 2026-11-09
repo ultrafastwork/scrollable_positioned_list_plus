@@ -1,3 +1,9 @@
+# Unreleased
+* Migrate off deprecated Flutter APIs: `cacheExtent`/`cacheExtentStyle` → `ScrollCacheExtent`, `Matrix4.translate` → `translateByDouble`.
+* Remove the `collection` dependency and the discontinued `pedantic` dev dependency.
+* Adopt `flutter_lints` and modern Dart 3 idioms (super parameters, switch expressions, records).
+* Example: migrate deprecated APIs and fix duplicate button keys.
+
 # 0.4.0
 * Forked from `scrollable_positioned_list` 0.3.8+1 (google/flutter.widgets) and renamed to `scrollable_positioned_list_plus`.
 * Main library is now `package:scrollable_positioned_list_plus/scrollable_positioned_list_plus.dart`.

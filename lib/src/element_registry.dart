@@ -7,8 +7,7 @@ import 'package:flutter/widgets.dart';
 /// A registry to track some [Element]s in the tree.
 class RegistryWidget extends StatefulWidget {
   /// Creates a [RegistryWidget].
-  const RegistryWidget({Key? key, this.elementNotifier, required this.child})
-      : super(key: key);
+  const RegistryWidget({super.key, this.elementNotifier, required this.child});
 
   /// The widget below this widget in the tree.
   final Widget child;
@@ -28,8 +27,7 @@ class RegistryWidget extends StatefulWidget {
 /// [RegistryWidget].
 class RegisteredElementWidget extends ProxyWidget {
   /// Creates a [RegisteredElementWidget].
-  const RegisteredElementWidget({Key? key, required Widget child})
-      : super(key: key, child: child);
+  const RegisteredElementWidget({super.key, required super.child});
 
   @override
   Element createElement() => _RegisteredElement(this);
@@ -39,25 +37,21 @@ class _RegistryWidgetState extends State<RegistryWidget> {
   final Set<Element> registeredElements = {};
 
   @override
-  Widget build(BuildContext context) => _InheritedRegistryWidget(
-        state: this,
-        child: widget.child,
-      );
+  Widget build(BuildContext context) =>
+      _InheritedRegistryWidget(state: this, child: widget.child);
 }
 
 class _InheritedRegistryWidget extends InheritedWidget {
-  final _RegistryWidgetState state;
+  const _InheritedRegistryWidget({required this.state, required super.child});
 
-  const _InheritedRegistryWidget(
-      {Key? key, required this.state, required Widget child})
-      : super(key: key, child: child);
+  final _RegistryWidgetState state;
 
   @override
   bool updateShouldNotify(InheritedWidget oldWidget) => true;
 }
 
 class _RegisteredElement extends ProxyElement {
-  _RegisteredElement(ProxyWidget widget) : super(widget);
+  _RegisteredElement(super.widget);
 
   @override
   void notifyClients(ProxyWidget oldWidget) {}
@@ -65,22 +59,20 @@ class _RegisteredElement extends ProxyElement {
   late _RegistryWidgetState _registryWidgetState;
 
   @override
-  void mount(Element? parent, dynamic newSlot) {
+  void mount(Element? parent, Object? newSlot) {
     super.mount(parent, newSlot);
-    final _inheritedRegistryWidget =
-        dependOnInheritedWidgetOfExactType<_InheritedRegistryWidget>()!;
-    _registryWidgetState = _inheritedRegistryWidget.state;
-    _registryWidgetState.registeredElements.add(this);
-    _registryWidgetState.widget.elementNotifier?.value =
-        _registryWidgetState.registeredElements;
+    _register();
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final _inheritedRegistryWidget =
-        dependOnInheritedWidgetOfExactType<_InheritedRegistryWidget>()!;
-    _registryWidgetState = _inheritedRegistryWidget.state;
+    _register();
+  }
+
+  void _register() {
+    _registryWidgetState =
+        dependOnInheritedWidgetOfExactType<_InheritedRegistryWidget>()!.state;
     _registryWidgetState.registeredElements.add(this);
     _registryWidgetState.widget.elementNotifier?.value =
         _registryWidgetState.registeredElements;

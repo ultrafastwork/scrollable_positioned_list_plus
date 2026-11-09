@@ -2,12 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'dart:async';
+
 import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:pedantic/pedantic.dart';
 import 'package:scrollable_positioned_list_plus/scrollable_positioned_list_plus.dart';
 import 'package:scrollable_positioned_list_plus/src/scroll_view.dart';
 
@@ -1304,8 +1305,8 @@ void main() {
     final itemPositionsListener = ItemPositionsListener.create();
     await setUpWidgetTest(tester, itemPositionsListener: itemPositionsListener);
 
-    final root = WidgetsBinding
-        .instance.pipelineOwner.semanticsOwner!.rootSemanticsNode!;
+    final root =
+        tester.binding.renderViews.single.owner!.semanticsOwner!.rootSemanticsNode!;
 
     final semanticNodes = <SemanticsNode>[root];
 

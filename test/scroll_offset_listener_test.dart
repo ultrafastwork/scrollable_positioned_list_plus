@@ -196,7 +196,7 @@ void main() {
 class ScrollSum {
   final bool recordProgrammaticScrolls;
   double totalScroll = 0.0;
-  final scrollOffsetListener;
+  final ScrollOffsetListener scrollOffsetListener;
 
   ScrollSum({this.recordProgrammaticScrolls = true})
       : scrollOffsetListener = ScrollOffsetListener.create(

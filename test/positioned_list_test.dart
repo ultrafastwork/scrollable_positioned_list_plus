@@ -362,7 +362,7 @@ void main() {
 
   testWidgets('Does not crash when updated offscreen',
       (WidgetTester tester) async {
-    late var setState;
+    late StateSetter setState;
     bool updated = false;
 
     // There's 0 relayout boundaries in this subtree.
