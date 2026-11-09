@@ -1,10 +1,11 @@
 # 18. Shrink the default cache extent — NEEDS OWNER DECISION
 
-**Area:** performance · **Line numbers:** `a0ee16b`
+**Area:** performance · **Line numbers:** `fddbc8c`
 
-**Status:** blocked on owner decision. Measurements are done (below) and show a clear gain. No code has changed. Pick an option under [Recommendation](#recommendation) to unblock.
+**Status:** blocked on owner decision. Measurements are done (below) and show a clear gain. No code has changed. Pick an option under [Recommendation](#recommendation) to unblock. (Re-checked on `fddbc8c`: still no decision recorded; line numbers refreshed after task 21.)
 
-- **Files:** `lib/src/scrollable_positioned_list.dart`: `_screenScrollCount` (line 19), `minCacheExtent` (lines 175-182), `_cacheExtent` (lines 529-535), the direct-vs-transition check in `_startScroll` (lines 620-634).
+- **Files:** `lib/src/scrollable_positioned_list.dart`: `_screenScrollCount` (line 19), `minCacheExtent` (constructors at lines 59 and 86, field at line 182), `_cacheExtent` (lines 568-574), `_positionedList` (lines 536-566), the direct-vs-transition check in `_startScroll` (lines 659-674).
+- **Wiring after task 21:** `_cacheExtent` is computed in `build` (line 486) and passed into `_positionedList`, whose cache check already compares `cacheExtent` (line 544). A new `cacheExtent` parameter only has to feed `_cacheExtent`; no `didUpdateWidget` change is needed for it to reach the list. `_screenScrollCount` is also the crossfade's jump distance (lines 675-677, 698-700). That's independent of the cache size, so it can stay as it is.
 - **Problem:** `_cacheExtent` is `max(viewportExtent × 2, minCacheExtent ?? 0)` on **each side** of the viewport. Flutter's default is 250 px. On an 800 px viewport, that's about 3,200 px of off-screen items built, laid out, registered and position-tracked on every frame, versus about 500 px for a `ListView`. Users can raise it through `minCacheExtent`, but they can't lower it. This is probably the largest steady-state cost in the package. It also multiplies the per-item cost in [task 19](19-lazy-position-computation.md).
 - **Why it's this big:** `_startScroll` animates directly only when the target already has an `ItemPosition`, meaning it was built inside the cache extent. Otherwise it crossfades. The large cache makes "nearby" cover about two screens in each direction. Shrinking it means medium-distance `scrollTo` calls switch from a direct animation to a crossfade. **That is a visible behaviour change, so it needs owner approval.**
 - **Options (pick with the owner):**
@@ -59,7 +60,7 @@ The public `itemPositionsListener` reports only the 12 visible items either way,
 ### What the numbers show
 
 - **The gain is well outside run-to-run noise (5–10 %).** Average build time while dragging drops by about 25–30 % in every drag scenario, and both runs agree.
-- **The long-scroll jank frame is roughly halved.** p99 goes from 70–74 ms to 29–34 ms and the worst frame from 81–96 ms to 37–48 ms, because the secondary list builds about a third as many items in its first frame. That frame is still over budget, so "missed build" stays around 20. The rest is [task 21](21-transition-cost.md).
+- **The long-scroll jank frame is roughly halved.** p99 goes from 70–74 ms to 29–34 ms and the worst frame from 81–96 ms to 37–48 ms, because the secondary list builds about a third as many items in its first frame. That frame is still over budget, so "missed build" stays around 20. The rest is [task 21](21-transition-cost.md) (now done; these numbers predate it, so re-measure on top of it when implementing).
 - **About 13 % more frames are delivered in the same wall-clock time.** Drag scenarios go from about 2,200–2,280 frames to about 2,515–2,530. Fewer vsyncs are being skipped on the 120 Hz panel, which the fixed 16 ms "missed" counter doesn't show.
 - **Raster time is flat or slightly better.** It is a little higher in the long scroll only because more frames now fall inside the measured window.
 - **Behaviour cost:** with the plain 250 px patch, exactly 3 of the 204 tests fail, all of them the expected change: `Scroll to 20 without fading` (vertical and horizontal) and `Scroll to 20 without fading small minCacheExtent`. On this device the viewport is about 830 dp, so direct animation would shrink from about 2 screens beyond the viewport to about 0.3 screens.
