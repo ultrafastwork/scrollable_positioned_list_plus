@@ -30,8 +30,8 @@ const int _screenScrollCount = 2;
 /// in the list.  The [itemPositionsNotifier] can be used to get a list of items
 /// currently laid out by the list.
 ///
-/// The [scrollOffsetListener] can be used to get updates about scroll position
-/// changes.
+/// A [ScrollOffsetListener] passed as `scrollOffsetListener` can be used to get
+/// updates about scroll position changes.
 ///
 /// All other parameters are the same as specified in [ListView].
 class ScrollablePositionedList extends StatefulWidget {
@@ -247,7 +247,10 @@ class ItemScrollController {
     Curve curve = Curves.linear,
     List<double> opacityAnimationWeights = const [40, 20, 40],
   }) {
-    assert(_scrollableListState != null);
+    assert(
+      _scrollableListState != null,
+      'ItemScrollController is not attached to a ScrollablePositionedList',
+    );
     assert(opacityAnimationWeights.length == 3);
     assert(duration > Duration.zero);
     return _scrollableListState!._scrollTo(
@@ -272,8 +275,8 @@ class ItemScrollController {
 /// Controller to scroll a certain number of pixels relative to the current
 /// scroll offset.
 ///
-/// Scrolls [offset] pixels relative to the current scroll offset. [offset] can
-/// be positive or negative.
+/// [animateScroll] scrolls `offset` pixels relative to the current scroll
+/// offset; `offset` can be positive or negative.
 ///
 /// This is an experimental API and is subject to change.
 /// Behavior may be ill-defined in some cases.  Please file bugs.
@@ -313,11 +316,11 @@ class ScrollOffsetController {
 class _ScrollablePositionedListState extends State<ScrollablePositionedList>
     with TickerProviderStateMixin {
   /// Details for the primary (active) [ListView].
-  var primary = _ListDisplayDetails(const ValueKey('Ping'));
+  _ListDisplayDetails primary = _ListDisplayDetails(const ValueKey('Ping'));
 
   /// Details for the secondary (transitional) [ListView] that is temporarily
   /// shown when scrolling a long distance.
-  var secondary = _ListDisplayDetails(const ValueKey('Pong'));
+  _ListDisplayDetails secondary = _ListDisplayDetails(const ValueKey('Pong'));
 
   final opacity = ProxyAnimation(const AlwaysStoppedAnimation<double>(0));
 
@@ -387,10 +390,10 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
     final currentOffset = source.offset;
     final offsetChange = currentOffset - previousOffset;
     previousOffset = currentOffset;
-    if (_isReanchoring) return;
-    if (!_isTransitioning ||
-        (widget.scrollOffsetNotifier?.recordProgrammaticScrolls ?? false)) {
-      widget.scrollOffsetNotifier?.changeController.add(offsetChange);
+    final notifier = widget.scrollOffsetNotifier;
+    if (notifier == null || _isReanchoring) return;
+    if (!_isTransitioning || notifier.recordProgrammaticScrolls) {
+      notifier.changeController.add(offsetChange);
     }
   }
 
@@ -459,64 +462,19 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
           onPointerDown: (_) => _stopScroll(canceled: true),
           child: Stack(
             children: <Widget>[
-              PostMountCallback(
-                key: primary.key,
-                callback: startAnimationCallback,
-                child: FadeTransition(
-                  opacity: _primaryOpacity,
-                  child: NotificationListener<ScrollNotification>(
-                    onNotification: (_) => _isTransitioning,
-                    child: PositionedList(
-                      itemBuilder: widget.itemBuilder,
-                      separatorBuilder: widget.separatorBuilder,
-                      itemCount: widget.itemCount,
-                      positionedIndex: primary.target,
-                      controller: primary.scrollController,
-                      itemPositionsNotifier: primary.itemPositionsNotifier,
-                      scrollDirection: widget.scrollDirection,
-                      reverse: widget.reverse,
-                      cacheExtent: cacheExtent,
-                      alignment: primary.alignment,
-                      physics: widget.physics,
-                      shrinkWrap: widget.shrinkWrap,
-                      addSemanticIndexes: widget.addSemanticIndexes,
-                      semanticChildCount: widget.semanticChildCount,
-                      padding: widget.padding,
-                      addAutomaticKeepAlives: widget.addAutomaticKeepAlives,
-                      addRepaintBoundaries: widget.addRepaintBoundaries,
-                    ),
-                  ),
-                ),
+              _buildList(
+                primary,
+                opacity: _primaryOpacity,
+                cacheExtent: cacheExtent,
+                // Swallow the primary's notifications while transitioning.
+                onNotification: (_) => _isTransitioning,
               ),
               if (_isTransitioning)
-                PostMountCallback(
-                  key: secondary.key,
-                  callback: startAnimationCallback,
-                  child: FadeTransition(
-                    opacity: opacity,
-                    child: NotificationListener<ScrollNotification>(
-                      onNotification: (_) => false,
-                      child: PositionedList(
-                        itemBuilder: widget.itemBuilder,
-                        separatorBuilder: widget.separatorBuilder,
-                        itemCount: widget.itemCount,
-                        itemPositionsNotifier: secondary.itemPositionsNotifier,
-                        positionedIndex: secondary.target,
-                        controller: secondary.scrollController,
-                        scrollDirection: widget.scrollDirection,
-                        reverse: widget.reverse,
-                        cacheExtent: cacheExtent,
-                        alignment: secondary.alignment,
-                        physics: widget.physics,
-                        shrinkWrap: widget.shrinkWrap,
-                        addSemanticIndexes: widget.addSemanticIndexes,
-                        semanticChildCount: widget.semanticChildCount,
-                        padding: widget.padding,
-                        addAutomaticKeepAlives: widget.addAutomaticKeepAlives,
-                        addRepaintBoundaries: widget.addRepaintBoundaries,
-                      ),
-                    ),
-                  ),
+                _buildList(
+                  secondary,
+                  opacity: opacity,
+                  cacheExtent: cacheExtent,
+                  onNotification: (_) => false,
                 ),
             ],
           ),
@@ -524,6 +482,41 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
       },
     );
   }
+
+  Widget _buildList(
+    _ListDisplayDetails details, {
+    required Animation<double> opacity,
+    required double cacheExtent,
+    required NotificationListenerCallback<ScrollNotification> onNotification,
+  }) => PostMountCallback(
+    key: details.key,
+    callback: startAnimationCallback,
+    child: FadeTransition(
+      opacity: opacity,
+      child: NotificationListener<ScrollNotification>(
+        onNotification: onNotification,
+        child: PositionedList(
+          itemBuilder: widget.itemBuilder,
+          separatorBuilder: widget.separatorBuilder,
+          itemCount: widget.itemCount,
+          positionedIndex: details.target,
+          controller: details.scrollController,
+          itemPositionsNotifier: details.itemPositionsNotifier,
+          scrollDirection: widget.scrollDirection,
+          reverse: widget.reverse,
+          cacheExtent: cacheExtent,
+          alignment: details.alignment,
+          physics: widget.physics,
+          shrinkWrap: widget.shrinkWrap,
+          addSemanticIndexes: widget.addSemanticIndexes,
+          semanticChildCount: widget.semanticChildCount,
+          padding: widget.padding,
+          addAutomaticKeepAlives: widget.addAutomaticKeepAlives,
+          addRepaintBoundaries: widget.addRepaintBoundaries,
+        ),
+      ),
+    ),
+  );
 
   double _cacheExtent(BoxConstraints constraints) => max(
     (widget.scrollDirection == Axis.vertical
@@ -753,7 +746,8 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
 
   void _updatePositions() {
     // Materialize once: a lazy `where` would be re-filtered by every consumer
-    // (and every listener) that iterates the reported positions.
+    // (and every listener) that iterates the reported positions. The source is
+    // sorted by index, so the filtered list is too.
     final itemPositions = primary.itemPositionsNotifier.itemPositions.value
         .where(
           (ItemPosition position) =>

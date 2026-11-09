@@ -13,6 +13,8 @@ import 'package:flutter/widgets.dart';
 /// computed to allow scroll extents outside 0 to 1.  See [Viewport]
 /// for more information.
 class UnboundedViewport extends Viewport {
+  /// Creates an [UnboundedViewport]. Unlike [Viewport], [anchor] is not
+  /// limited to 0 to 1.
   UnboundedViewport({
     super.key,
     super.axisDirection,
@@ -94,9 +96,8 @@ class UnboundedRenderViewport extends RenderViewport {
   @override
   void performResize() {
     super.performResize();
-    // TODO: Figure out why this override is needed as a result of
-    // https://github.com/flutter/flutter/pull/61973 and see if it can be
-    // removed somehow.
+    // Needed since https://github.com/flutter/flutter/pull/61973; it is not
+    // known why, or whether it can be removed.
     offset.applyViewportDimension(switch (axis) {
       Axis.vertical => size.height,
       Axis.horizontal => size.width,
@@ -170,7 +171,6 @@ class UnboundedRenderViewport extends RenderViewport {
     } while (count < _maxLayoutCycles);
     assert(() {
       if (count >= _maxLayoutCycles) {
-        assert(count != 1);
         throw FlutterError(
           'A RenderViewport exceeded its maximum number of layout cycles.\n'
           'RenderViewport render objects, during layout, can retry if either their '

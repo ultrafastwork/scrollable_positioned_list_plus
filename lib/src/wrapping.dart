@@ -610,11 +610,13 @@ class _ViewportElement extends MultiChildRenderObjectElement {
   }
 }
 
+/// Parent data for slivers in a [CustomRenderViewport], which also records
+/// each child's layout offset and growth direction.
 class CustomSliverPhysicalContainerParentData
     extends SliverPhysicalContainerParentData {
   /// The position of the child relative to the zero scroll offset.
   ///
-  /// The number of pixels from from the zero scroll offset of the parent sliver
+  /// The number of pixels from the zero scroll offset of the parent sliver
   /// (the line at which its [SliverConstraints.scrollOffset] is zero) to the
   /// side of the child closest to that offset. A [layoutOffset] can be null
   /// when it cannot be determined. The value will be set after layout.
@@ -624,6 +626,8 @@ class CustomSliverPhysicalContainerParentData
   /// Defaults to null.
   double? layoutOffset;
 
+  /// Whether the child was laid out after (forward) or before (reverse) the
+  /// center sliver. Null until the child has been laid out.
   GrowthDirection? growthDirection;
 }
 

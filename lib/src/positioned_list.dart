@@ -18,7 +18,7 @@ import 'wrapping.dart';
 /// [PositionedList] lays out children in the same way as [ListView].
 ///
 /// The list can be displayed with the item at [positionedIndex] positioned at
-/// a particular [alignment].  See [ItemScrollController.jumpTo] for an
+/// a particular [alignment].  See `ItemScrollController.jumpTo` for an
 /// explanation of alignment.
 ///
 /// All other parameters are the same as specified in [ListView].
@@ -70,7 +70,7 @@ class PositionedList extends StatefulWidget {
   /// Determines where the leading edge of the item at [positionedIndex]
   /// should be placed.
   ///
-  /// See [ItemScrollController.jumpTo] for an explanation of alignment.
+  /// See `ItemScrollController.jumpTo` for an explanation of alignment.
   final double alignment;
 
   /// The axis along which the scroll view scrolls.
@@ -377,6 +377,9 @@ class _PositionedListState extends State<PositionedList> {
             );
           }
         }
+        // The registry is unordered; sort so consumers get a stable order and
+        // [samePositions] can compare element-wise.
+        positions.sort((a, b) => a.index.compareTo(b.index));
         final notifier = widget.itemPositionsNotifier?.itemPositions;
         // Skip the assignment (and the listener calls) when nothing moved.
         if (notifier != null && !samePositions(notifier.value, positions)) {

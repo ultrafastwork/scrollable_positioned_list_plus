@@ -12,15 +12,12 @@ class ItemPositionsNotifier implements ItemPositionsListener {
   final ValueNotifier<Iterable<ItemPosition>> itemPositions = ValueNotifier([]);
 }
 
-/// Whether [current] already holds exactly [positions], in any order.
+/// Whether [current] already holds exactly [positions], in the same order.
 ///
-/// Positions are collected from an unordered element registry, so the same
-/// positions can come back in a different order.
+/// Both lists are expected to be sorted by [ItemPosition.index] (positions are
+/// sorted when they are collected), so an element-wise comparison is enough
+/// and no temporary sets need to be allocated on every frame.
 bool samePositions(
   Iterable<ItemPosition> current,
   List<ItemPosition> positions,
-) =>
-    current is List<ItemPosition> &&
-    (listEquals(current, positions) ||
-        (current.length == positions.length &&
-            setEquals(current.toSet(), positions.toSet())));
+) => current is List<ItemPosition> && listEquals(current, positions);

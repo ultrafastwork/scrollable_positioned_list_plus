@@ -11,6 +11,8 @@ import 'wrapping.dart';
 /// A version of [CustomScrollView] that allows does not constrict the extents
 /// to be within 0 and 1. See [CustomScrollView] for more information.
 class UnboundedCustomScrollView extends CustomScrollView {
+  /// Creates an [UnboundedCustomScrollView]. Unlike [CustomScrollView],
+  /// [anchor] is not limited to 0 to 1.
   const UnboundedCustomScrollView({
     super.key,
     super.scrollDirection,
