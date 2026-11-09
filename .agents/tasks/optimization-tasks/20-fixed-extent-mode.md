@@ -1,10 +1,11 @@
 # 20. Fixed-extent mode (`itemExtent` / `prototypeItem`) — NEEDS OWNER DECISION
 
-**Area:** performance (new public API) · **Line numbers:** `89c3433`
+**Area:** performance (new public API) · **Line numbers:** `884e7c8`
 
-**Status:** blocked on owner decision. A throwaway prototype was measured on the device (below). No code has changed. Answer the questions under [Recommendation](#recommendation) to unblock.
+**Status:** blocked on owner decision. A throwaway prototype was measured on the device (below). No code has changed. Answer the questions under [Recommendation](#recommendation) to unblock. (Re-checked on `884e7c8`: still no decision recorded; line numbers refreshed after task 21.)
 
-- **Files:** `lib/src/scrollable_positioned_list.dart` (constructors, `_buildList` lines 508-541, `_startScroll` lines 615-704), `lib/src/positioned_list.dart` (`build` lines 171-247), `README.md`, `CHANGELOG.md`, `example/`.
+- **Files:** `lib/src/scrollable_positioned_list.dart` (constructors at lines 40 and 66, `didUpdateWidget` lines 436-480, `_buildList` lines 512-527, `_positionedList` lines 536-566, `_startScroll` lines 640-790 with the direct-vs-transition check at lines 659-674), `lib/src/positioned_list.dart` (`build` lines 171-255, the three `SliverList`s at lines 191, 210 and 229), `README.md`, `CHANGELOG.md`, `example/`.
+- **Wiring after task 21:** `PositionedList` widgets are now cached per list in `_positionedList`, and its cache check compares only `positionedIndex`, `alignment` and `cacheExtent`. `didUpdateWidget` clears both cached lists (lines 468-469), so a changed `itemExtent`/`prototypeItem` still reaches the list without touching the cache check; just pass the new parameters through in the `PositionedList(...)` call. The fixed-extent direct path belongs in the `itemPosition != null` branch's condition at lines 662-674 (direct when within the cap), leaving the crossfade branch untouched.
 - **Opportunity:** when every item has the same main-axis extent, the offset of any item is `index × extent`. So:
   - **`scrollTo` never needs the crossfade.** Compute the target offset and `animateTo` it on the primary list, with no secondary list, no opacity layers and no dependency on the cache extent ([task 18](18-default-cache-extent.md)).
   - **Layout is cheaper.** `SliverFixedExtentList` (or `SliverPrototypeExtentList`) doesn't measure children to place them.
@@ -58,6 +59,7 @@ Every `scrollTo` takes 600 ms with `Curves.linear`. The viewport is about 830 dp
 - **The real win is medium-distance `scrollTo`.** At about 3.5 screens, the default path crossfades and has a 70 ms hitch frame with about 21 missed frames per 10 scrolls. The fixed-extent direct animation has p99 7 ms and no missed frames, and it lands exactly. This is the range users notice most: "jump to the section below".
 - **A direct `animateTo` over a long distance is unusable.** Over 4,900 items, the frame rate collapses to about 15 fps for the whole animation (141–157 frames over 6 s, 84–86 missed). Every frame builds a new viewport plus cache of items. This rules out "always animate directly".
 - **The crossover is between 10 and 20 screens** (for a 600 ms scroll on this device). At 10 screens the direct path still beats the crossfade on every metric (8 missed, worst 23 ms, against about 22 missed and an 80 ms hitch). At 20 screens it misses more frames than the crossfade (32), although it never has a single long hitch.
+- **Task 21 has since made the crossfade cheaper** (about a third fewer dropped vsyncs, worst frame about 15–20 % lower). The default-path rows above predate it, so the crossover may sit nearer 10 screens than 20. Re-measure `medium_scroll_to`, `long_scroll_to` and `fixed_10_screens_scroll_to` on top of task 21 before fixing the cap.
 - **"Jump to 2 screens out, then animate" isn't worth it.** The jump frame costs as much as the crossfade's first frame (p99 63–67 ms), because it builds a fresh viewport and cache in one frame. It misses fewer frames than the crossfade (10 against 22–28) only because there's one list, not two. And with no fade, the jump is a visible teleport.
 
 ## Recommendation

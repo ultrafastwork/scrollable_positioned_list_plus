@@ -21,7 +21,7 @@ Recommended order: **18 → 20.** (19, 21, 22 and 23 are done. Both remaining ta
 | # | Task | Area | Status |
 |---|------|------|--------|
 | 18 | [Shrink the default cache extent](18-default-cache-extent.md) — NEEDS OWNER DECISION | performance | blocked on owner decision (measured: about 25 % less build time while dragging, long-scroll jank frame halved; recommendation in the file) |
-| 20 | [Fixed-extent mode (`itemExtent` / `prototypeItem`)](20-fixed-extent-mode.md) — NEEDS OWNER DECISION | performance, new API | blocked on owner decision (prototype measured: direct `scrollTo` beats the crossfade up to about 10 screens, no gain while dragging; recommendation in the file) |
+| 20 | [Fixed-extent mode (`itemExtent` / `prototypeItem`)](20-fixed-extent-mode.md) — NEEDS OWNER DECISION | performance, new API | blocked on owner decision (prototype measured: direct `scrollTo` beats the crossfade up to about 10 screens, no gain while dragging; recommendation in the file; pointers refreshed after task 21) |
 
 **File conflicts:**
 - Tasks 18 and 20 both edit `lib/src/scrollable_positioned_list.dart`, and 20 also edits `lib/src/positioned_list.dart`. Give them to one agent or do them one after another. Task 21 changed `_buildList` (it now goes through `_positionedList`, which caches the `PositionedList` widget) and the transition branch of `_startScroll`. Task 18's cache extent and task 20's `itemExtent` must go through `_positionedList`'s cache check, or be cleared in `didUpdateWidget`, or a change won't reach the list.
