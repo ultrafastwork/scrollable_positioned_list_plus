@@ -570,7 +570,18 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
     Curve curve = Curves.linear,
     required List<double> opacityAnimationWeights,
   }) async {
-    final direction = index > primary.target ? 1 : -1;
+    // Compare against what's on screen: primary.target is only the last
+    // anchor and goes stale once the user scrolls by hand.
+    final visibleIndices = primary.itemPositionsNotifier.itemPositions.value
+        .where(
+          (position) =>
+              position.itemLeadingEdge < 1 && position.itemTrailingEdge > 0,
+        )
+        .map((position) => position.index);
+    final currentIndex = visibleIndices.isEmpty
+        ? primary.target
+        : visibleIndices.reduce(min);
+    final direction = index > currentIndex ? 1 : -1;
     final itemPosition = primary.itemPositionsNotifier.itemPositions.value
         .where((itemPosition) => itemPosition.index == index)
         .firstOrNull;

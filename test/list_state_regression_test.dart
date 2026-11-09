@@ -153,6 +153,52 @@ void main() {
       expect(deltas, isEmpty);
     }, skip: _task3Skip);
   });
+
+  group('Task 4: long scroll direction follows what is on screen', () {
+    int firstVisibleIndex(ItemPositionsListener listener) => listener
+        .itemPositions
+        .value
+        .map((position) => position.index)
+        .reduce((a, b) => a < b ? a : b);
+
+    testWidgets('scrolls backward after a manual drag past the target', (
+      tester,
+    ) async {
+      final itemScrollController = ItemScrollController();
+      final itemPositionsListener = ItemPositionsListener.create();
+      await setUpWidgetTest(
+        tester,
+        itemScrollController: itemScrollController,
+        itemPositionsListener: itemPositionsListener,
+      );
+
+      // Anchor the list at 50, then drag by hand to around item 200. The
+      // list's anchor (`primary.target`) stays 50.
+      itemScrollController.jumpTo(index: 50);
+      await tester.pumpAndSettle();
+      await tester.drag(
+        find.byType(ScrollablePositionedList),
+        const Offset(0, -150 * itemHeight),
+      );
+      await tester.pumpAndSettle();
+      final start = firstVisibleIndex(itemPositionsListener);
+      expect(start, greaterThan(150));
+
+      unawaited(
+        itemScrollController.scrollTo(index: 100, duration: scrollDuration),
+      );
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // While transitioning, the reported positions come from the list that
+      // was on screen; it must move toward 100, not away from it.
+      expect(firstVisibleIndex(itemPositionsListener), lessThan(start));
+
+      await tester.pumpAndSettle();
+      expect(firstVisibleIndex(itemPositionsListener), 100);
+    });
+  });
 }
 
 /// Task 3 is NEEDS OWNER DECISION: the fix lives in
