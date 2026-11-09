@@ -16,16 +16,17 @@ This file is the index. Each task has its own file in this directory with the fu
 
 ## Open tasks
 
-Recommended order: **18 → 20 → 21.** (19 and 22 are done.)
+Recommended order: **23 → 18 → 20 → 21.** (19 and 22 are done.)
 
 | # | Task | Area | Status |
 |---|------|------|--------|
+| 23 | [A newly passed `itemPositionsListener` stays empty until something moves](23-new-listener-stays-empty.md) | correctness | not started |
 | 18 | [Shrink the default cache extent](18-default-cache-extent.md) — NEEDS OWNER DECISION | performance | not started |
 | 20 | [Fixed-extent mode (`itemExtent` / `prototypeItem`)](20-fixed-extent-mode.md) — NEEDS OWNER DECISION | performance, new API | not started |
 | 21 | [Reduce the cost of the long-scroll crossfade](21-transition-cost.md) (low priority) | performance | not started |
 
 **File conflicts:**
-- Tasks 18, 20 and 21 all edit `lib/src/scrollable_positioned_list.dart`, and 20 also edits `lib/src/positioned_list.dart`. Give them to one agent or do them one after another.
+- Tasks 18, 20, 21 and 23 all edit `lib/src/scrollable_positioned_list.dart`, and 20 also edits `lib/src/positioned_list.dart`. Give them to one agent or do them one after another.
 - Task 20 should also add `itemExtent` scenarios to `example/integration_test/perf_test.dart` (scenario 6 of task 22).
 
 **Running the device harness (task 22):** connect a real Android or iOS device (`fvm flutter devices`), then from `example/` run:
@@ -67,7 +68,7 @@ fvm flutter drive --profile --no-dds --driver=test_driver/perf_driver.dart --tar
 | 9 | [Skip redundant `_updatePositions` work for the hidden secondary list](09-skip-secondary-position-updates.md) | done |
 | 10 | [Remove dead state in the shrink-wrap viewport](10-shrink-wrap-dead-state.md) | done |
 | 13 | [Position comparison is order-sensitive](13-order-sensitive-position-comparison.md) | done, superseded by `22d1e85` |
-| 19 | [Compute item positions only when needed, and more cheaply](19-lazy-position-computation.md) | closed, not worth it (no measurable device gain; patch kept, and it surfaced a stale-new-listener bug worth its own task) |
+| 19 | [Compute item positions only when needed, and more cheaply](19-lazy-position-computation.md) | closed, not worth it (no measurable device gain; patch kept; the bug it surfaced is [task 23](23-new-listener-stays-empty.md)) |
 
 ### Tooling
 

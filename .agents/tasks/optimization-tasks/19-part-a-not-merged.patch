@@ -1,0 +1,671 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 00f2519..38ce7b5 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -8,6 +8,8 @@
+ * Fix: a long `scrollTo` animates in the right direction after the user has scrolled by hand. The direction used to come from the last item jumped or scrolled to, not from what was on screen.
+ * Fix: a shrink-wrapped list whose content keeps changing size during layout now stops after 10 layout passes (with a descriptive error in debug mode) instead of hanging.
+ * `ItemPositionsListener.itemPositions` listeners are no longer called when a rebuild leaves every position unchanged.
++* Performance: without an `itemPositionsListener`, the list no longer computes item positions after every scroll frame. The position restored through `PageStorage` is now saved when a scroll ends and after each rebuild, instead of after every frame.
++* Fix: an `itemPositionsListener` passed to an existing list (or swapped for another) now gets the current positions straight away. It used to stay empty until something moved.
+ * `ItemScrollController.jumpTo` and `ScrollOffsetController.animateScroll` now fail with a descriptive assert when the controller isn't attached to a list.
+ * Migrate off deprecated Flutter APIs: `cacheExtent`/`cacheExtentStyle` → `ScrollCacheExtent`, `Matrix4.translate` → `translateByDouble`.
+ * Remove the `collection` dependency and the discontinued `pedantic` dev dependency.
+diff --git a/lib/src/positioned_list.dart b/lib/src/positioned_list.dart
+index 80b42d7..b976fc6 100644
+--- a/lib/src/positioned_list.dart
++++ b/lib/src/positioned_list.dart
+@@ -12,6 +12,25 @@ import 'item_positions_notifier.dart';
+ import 'scroll_view.dart';
+ import 'wrapping.dart';
+ 
++/// How many times any [PositionedList] has computed its item positions.
++///
++/// Only for tests that check position work is skipped when nobody needs it.
++@visibleForTesting
++int debugItemPositionComputations = 0;
++
++/// Lets the owner of a [PositionedList] compute the list's item positions on
++/// demand, for example when [PositionedList.itemPositionsNotifier] is null and
++/// positions aren't tracked after every frame.
++class PositionedListHandle {
++  _PositionedListState? _state;
++
++  /// Positions of the items in the list's last layout, sorted by index.
++  ///
++  /// Empty if the list isn't mounted or hasn't been laid out yet.
++  List<ItemPosition> computeItemPositions() =>
++      _state?._computeItemPositions() ?? const <ItemPosition>[];
++}
++
+ /// A list of widgets similar to [ListView], except scroll control
+ /// and position reporting is based on index rather than pixel offset.
+ ///
+@@ -31,6 +50,7 @@ class PositionedList extends StatefulWidget {
+     this.separatorBuilder,
+     this.controller,
+     this.itemPositionsNotifier,
++    this.handle,
+     this.positionedIndex = 0,
+     this.alignment = 0,
+     this.scrollDirection = Axis.vertical,
+@@ -61,8 +81,14 @@ class PositionedList extends StatefulWidget {
+   final ScrollController? controller;
+ 
+   /// Notifier that reports the items laid out in the list after each frame.
++  ///
++  /// If null, positions aren't computed after each frame at all; use [handle]
++  /// to compute them on demand.
+   final ItemPositionsNotifier? itemPositionsNotifier;
+ 
++  /// Lets the owner compute the item positions on demand.
++  final PositionedListHandle? handle;
++
+   /// Index of an item to initially align to a position within the viewport
+   /// defined by [alignment].
+   final int positionedIndex;
+@@ -150,11 +176,13 @@ class _PositionedListState extends State<PositionedList> {
+     _ownsScrollController = widget.controller == null;
+     scrollController = widget.controller ?? ScrollController();
+     scrollController.addListener(_schedulePositionNotificationUpdate);
++    widget.handle?._state = this;
+     _schedulePositionNotificationUpdate();
+   }
+ 
+   @override
+   void dispose() {
++    if (identical(widget.handle?._state, this)) widget.handle!._state = null;
+     scrollController.removeListener(_schedulePositionNotificationUpdate);
+     if (_ownsScrollController) scrollController.dispose();
+     registeredElements.dispose();
+@@ -164,6 +192,12 @@ class _PositionedListState extends State<PositionedList> {
+   @override
+   void didUpdateWidget(PositionedList oldWidget) {
+     super.didUpdateWidget(oldWidget);
++    if (!identical(oldWidget.handle, widget.handle)) {
++      if (identical(oldWidget.handle?._state, this)) {
++        oldWidget.handle!._state = null;
++      }
++      widget.handle?._state = this;
++    }
+     _schedulePositionNotificationUpdate();
+   }
+ 
+@@ -314,81 +348,92 @@ class _PositionedListState extends State<PositionedList> {
+   }
+ 
+   void _schedulePositionNotificationUpdate() {
++    // Nobody listens after every frame; owners use [PositionedListHandle].
++    if (widget.itemPositionsNotifier == null) return;
+     if (!updateScheduled) {
+       updateScheduled = true;
+       SchedulerBinding.instance.addPostFrameCallback((_) {
+-        final elements = registeredElements.value;
+-        // The list may have been disposed, or not yet attached to a scroll
+-        // position, by the time this frame callback runs.
+-        if (!mounted || elements == null || !scrollController.hasClients) {
+-          updateScheduled = false;
+-          return;
+-        }
+-        final viewportDimension = scrollController.position.viewportDimension;
+-        final positions = <ItemPosition>[];
+-        RenderViewportBase? viewport;
+-        var anchor = 0.0;
+-        for (var element in elements) {
+-          final box = element.renderObject! as RenderBox;
+-          if (viewport == null) {
+-            viewport = RenderAbstractViewport.of(box) as RenderViewportBase?;
+-            anchor = switch (viewport) {
+-              final RenderViewport v => v.anchor,
+-              final CustomRenderViewport v => v.anchor,
+-              _ => 0.0,
+-            };
+-          }
+-
+-          final key = element.widget.key! as ValueKey<int>;
+-          // Skip this element if `box` has never been laid out.
+-          if (!box.hasSize) continue;
+-          if (widget.scrollDirection == Axis.vertical) {
+-            final reveal = viewport!.getOffsetToReveal(box, 0).offset;
+-            if (!reveal.isFinite) continue;
+-            final itemOffset =
+-                reveal - viewport.offset.pixels + anchor * viewport.size.height;
+-            positions.add(
+-              ItemPosition(
+-                index: key.value,
+-                itemLeadingEdge: itemOffset.round() / viewportDimension,
+-                itemTrailingEdge:
+-                    (itemOffset + box.size.height).round() / viewportDimension,
+-              ),
+-            );
+-          } else {
+-            final itemOffset = box
+-                .localToGlobal(Offset.zero, ancestor: viewport)
+-                .dx;
+-            if (!itemOffset.isFinite) continue;
+-            positions.add(
+-              ItemPosition(
+-                index: key.value,
+-                itemLeadingEdge:
+-                    (widget.reverse
+-                            ? viewportDimension - (itemOffset + box.size.width)
+-                            : itemOffset)
+-                        .round() /
+-                    viewportDimension,
+-                itemTrailingEdge:
+-                    (widget.reverse
+-                            ? viewportDimension - itemOffset
+-                            : (itemOffset + box.size.width))
+-                        .round() /
+-                    viewportDimension,
+-              ),
+-            );
+-          }
+-        }
+-        // The registry is unordered; sort so consumers get a stable order and
+-        // [samePositions] can compare element-wise.
+-        positions.sort((a, b) => a.index.compareTo(b.index));
++        updateScheduled = false;
+         final notifier = widget.itemPositionsNotifier?.itemPositions;
++        if (!mounted || notifier == null) return;
++        final positions = _computeItemPositions();
+         // Skip the assignment (and the listener calls) when nothing moved.
+-        if (notifier != null && !samePositions(notifier.value, positions)) {
++        if (positions != null && !samePositions(notifier.value, positions)) {
+           notifier.value = positions;
+         }
+-        updateScheduled = false;
+       });
+     }
+   }
++
++  /// Positions of the registered items in the last layout, sorted by index.
++  ///
++  /// Null if the list hasn't been attached to a scroll position yet.
++  List<ItemPosition>? _computeItemPositions() {
++    final elements = registeredElements.value;
++    // The list may not be attached to a scroll position yet.
++    if (elements == null || !scrollController.hasClients) return null;
++    assert(() {
++      debugItemPositionComputations++;
++      return true;
++    }());
++    final viewportDimension = scrollController.position.viewportDimension;
++    final positions = <ItemPosition>[];
++    RenderViewportBase? viewport;
++    var anchor = 0.0;
++    for (var element in elements) {
++      final box = element.renderObject! as RenderBox;
++      if (viewport == null) {
++        viewport = RenderAbstractViewport.of(box) as RenderViewportBase?;
++        anchor = switch (viewport) {
++          final RenderViewport v => v.anchor,
++          final CustomRenderViewport v => v.anchor,
++          _ => 0.0,
++        };
++      }
++
++      final key = element.widget.key! as ValueKey<int>;
++      // Skip this element if `box` has never been laid out.
++      if (!box.hasSize) continue;
++      if (widget.scrollDirection == Axis.vertical) {
++        final reveal = viewport!.getOffsetToReveal(box, 0).offset;
++        if (!reveal.isFinite) continue;
++        final itemOffset =
++            reveal - viewport.offset.pixels + anchor * viewport.size.height;
++        positions.add(
++          ItemPosition(
++            index: key.value,
++            itemLeadingEdge: itemOffset.round() / viewportDimension,
++            itemTrailingEdge:
++                (itemOffset + box.size.height).round() / viewportDimension,
++          ),
++        );
++      } else {
++        final itemOffset = box
++            .localToGlobal(Offset.zero, ancestor: viewport)
++            .dx;
++        if (!itemOffset.isFinite) continue;
++        positions.add(
++          ItemPosition(
++            index: key.value,
++            itemLeadingEdge:
++                (widget.reverse
++                        ? viewportDimension - (itemOffset + box.size.width)
++                        : itemOffset)
++                    .round() /
++                viewportDimension,
++            itemTrailingEdge:
++                (widget.reverse
++                        ? viewportDimension - itemOffset
++                        : (itemOffset + box.size.width))
++                    .round() /
++                viewportDimension,
++          ),
++        );
++      }
++    }
++    // The registry is unordered; sort so consumers get a stable order and
++    // [samePositions] can compare element-wise.
++    positions.sort((a, b) => a.index.compareTo(b.index));
++    return positions;
++  }
+ }
+diff --git a/lib/src/scrollable_positioned_list.dart b/lib/src/scrollable_positioned_list.dart
+index 83e0817..2445c15 100644
+--- a/lib/src/scrollable_positioned_list.dart
++++ b/lib/src/scrollable_positioned_list.dart
+@@ -459,10 +459,30 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
+       if (primary.target > lastIndex) primary.target = lastIndex;
+       if (secondary.target > lastIndex) secondary.target = lastIndex;
+     }
++
++    // A new listener must get the current positions straight away, even if
++    // nothing moves. They may not have been tracked so far (no listener), or
++    // they may already be up to date (another listener), so neither the
++    // per-frame tracking nor its change check would report them.
++    if (widget.itemPositionsNotifier != null &&
++        !identical(
++          widget.itemPositionsNotifier,
++          oldWidget.itemPositionsNotifier,
++        )) {
++      SchedulerBinding.instance.addPostFrameCallback((_) {
++        if (!mounted) return;
++        final tracked = primary.itemPositionsNotifier.itemPositions;
++        final positions = primary.positions.computeItemPositions();
++        // Notifies the listener added in initState, which reports them.
++        if (!samePositions(tracked.value, positions)) tracked.value = positions;
++        _updatePositions();
++      });
++    }
+   }
+ 
+   @override
+   Widget build(BuildContext context) {
++    _schedulePositionSave();
+     return LayoutBuilder(
+       builder: (context, constraints) {
+         final cacheExtent = _cacheExtent(constraints);
+@@ -474,8 +494,14 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
+                 primary,
+                 opacity: _primaryOpacity,
+                 cacheExtent: cacheExtent,
+-                // Swallow the primary's notifications while transitioning.
+-                onNotification: (_) => _isTransitioning,
++                onNotification: (notification) {
++                  if (notification is ScrollEndNotification &&
++                      notification.depth == 0) {
++                    _schedulePositionSave();
++                  }
++                  // Swallow the primary's notifications while transitioning.
++                  return _isTransitioning;
++                },
+               ),
+               if (_isTransitioning)
+                 _buildList(
+@@ -509,7 +535,12 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
+           itemCount: widget.itemCount,
+           positionedIndex: details.target,
+           controller: details.scrollController,
+-          itemPositionsNotifier: details.itemPositionsNotifier,
++          // Without an app listener nobody needs positions after every frame;
++          // _startScroll and _schedulePositionSave compute them on demand.
++          itemPositionsNotifier: widget.itemPositionsNotifier == null
++              ? null
++              : details.itemPositionsNotifier,
++          handle: details.positions,
+           scrollDirection: widget.scrollDirection,
+           reverse: widget.reverse,
+           cacheExtent: cacheExtent,
+@@ -606,8 +637,10 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
+     required List<double> opacityAnimationWeights,
+   }) async {
+     // Compare against what's on screen: primary.target is only the last
+-    // anchor and goes stale once the user scrolls by hand.
+-    final visibleIndices = primary.itemPositionsNotifier.itemPositions.value
++    // anchor and goes stale once the user scrolls by hand. Computed from the
++    // last layout, the same data the per-frame tracking reads.
++    final positions = primary.positions.computeItemPositions();
++    final visibleIndices = positions
+         .where(
+           (position) =>
+               position.itemLeadingEdge < 1 && position.itemTrailingEdge > 0,
+@@ -617,7 +650,7 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
+         ? primary.target
+         : visibleIndices.reduce(min);
+     final direction = index > currentIndex ? 1 : -1;
+-    final itemPosition = primary.itemPositionsNotifier.itemPositions.value
++    final itemPosition = positions
+         .where((itemPosition) => itemPosition.index == index)
+         .firstOrNull;
+     if (itemPosition != null) {
+@@ -762,35 +795,76 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
+   }
+ 
+   void _updatePositions() {
+-    // Materialize once: a lazy `where` would be re-filtered by every consumer
+-    // (and every listener) that iterates the reported positions. The source is
+-    // sorted by index, so the filtered list is too.
+-    final itemPositions = primary.itemPositionsNotifier.itemPositions.value
+-        .where(
+-          (ItemPosition position) =>
+-              position.itemLeadingEdge < 1 && position.itemTrailingEdge > 0,
+-        )
+-        .toList(growable: false);
+-    if (itemPositions.isNotEmpty) {
+-      PageStorage.maybeOf(context)?.writeState(
+-        context,
+-        itemPositions.reduce(
+-          (value, element) =>
+-              value.itemLeadingEdge < element.itemLeadingEdge ? value : element,
+-        ),
+-      );
+-    }
+     final notifier = widget.itemPositionsNotifier?.itemPositions;
+-    if (notifier != null && !samePositions(notifier.value, itemPositions)) {
++    if (notifier == null) return;
++    final itemPositions = _visible(
++      primary.itemPositionsNotifier.itemPositions.value,
++    );
++    if (!samePositions(notifier.value, itemPositions)) {
+       notifier.value = itemPositions;
+     }
+   }
++
++  /// The [positions] that are at least partly inside the viewport.
++  ///
++  /// Materialized once: a lazy `where` would be re-filtered by every consumer
++  /// (and every listener) that iterates the reported positions. The source is
++  /// sorted by index, so the filtered list is too.
++  static List<ItemPosition> _visible(Iterable<ItemPosition> positions) =>
++      positions
++          .where(
++            (ItemPosition position) =>
++                position.itemLeadingEdge < 1 && position.itemTrailingEdge > 0,
++          )
++          .toList(growable: false);
++
++  bool _saveScheduled = false;
++
++  /// Saves the first visible item to [PageStorage] after this frame's layout,
++  /// so a re-created list (for example a page scrolled back into a
++  /// [PageView]) restores it.
++  ///
++  /// Called after every build and when a scroll of the primary list ends,
++  /// rather than after every frame: like [ScrollPosition], which saves its
++  /// offset when a scroll ends. It can't be done in [deactivate], because by
++  /// then the context can't reach its ancestors and the render objects are
++  /// detached.
++  void _schedulePositionSave() {
++    if (_saveScheduled) return;
++    _saveScheduled = true;
++    SchedulerBinding.instance
++      ..addPostFrameCallback((_) {
++        _saveScheduled = false;
++        if (!mounted) return;
++        final bucket = PageStorage.maybeOf(context);
++        if (bucket == null) return;
++        final itemPositions = _visible(
++          primary.positions.computeItemPositions(),
++        );
++        if (itemPositions.isEmpty) return;
++        bucket.writeState(
++          context,
++          itemPositions.reduce(
++            (value, element) => value.itemLeadingEdge < element.itemLeadingEdge
++                ? value
++                : element,
++          ),
++        );
++      })
++      // A scroll can end between frames (a drag released without a fling).
++      ..ensureVisualUpdate();
++  }
+ }
+ 
+ class _ListDisplayDetails {
+   _ListDisplayDetails(this.key);
+ 
++  /// Positions tracked after every frame, only while the app passes an
++  /// [ScrollablePositionedList.itemPositionsNotifier].
+   final itemPositionsNotifier = ItemPositionsNotifier();
++
++  /// Computes this list's positions on demand.
++  final positions = PositionedListHandle();
+   final scrollController = ScrollController(keepScrollOffset: false);
+ 
+   /// The index of the item to scroll to.
+diff --git a/test/list_state_regression_test.dart b/test/list_state_regression_test.dart
+index fef86b3..fa64716 100644
+--- a/test/list_state_regression_test.dart
++++ b/test/list_state_regression_test.dart
+@@ -11,6 +11,7 @@ import 'package:flutter/rendering.dart';
+ import 'package:flutter_test/flutter_test.dart';
+ import 'package:scrollable_positioned_list_plus/scrollable_positioned_list_plus.dart';
+ import 'package:scrollable_positioned_list_plus/src/element_registry.dart';
++import 'package:scrollable_positioned_list_plus/src/positioned_list.dart';
+ import 'package:scrollable_positioned_list_plus/src/wrapping.dart';
+ 
+ const screenHeight = 400.0;
+@@ -675,6 +676,221 @@ void main() {
+       expect(completed, isTrue);
+     });
+   });
++
++  group('Task 19: positions are only computed when needed', () {
++    Widget list({
++      Key? key,
++      ItemScrollController? itemScrollController,
++      ItemPositionsListener? itemPositionsListener,
++    }) => ScrollablePositionedList.builder(
++      key: key,
++      itemCount: defaultItemCount,
++      itemScrollController: itemScrollController,
++      itemPositionsListener: itemPositionsListener,
++      itemBuilder: (context, index) =>
++          SizedBox(height: itemHeight, child: Text('Item $index')),
++    );
++
++    testWidgets('a drag without a listener does no position work', (
++      tester,
++    ) async {
++      tester.view.devicePixelRatio = 1.0;
++      tester.view.physicalSize = const Size(screenWidth, screenHeight);
++      addTearDown(tester.view.reset);
++      final bucket = _CountingBucket();
++      await tester.pumpWidget(
++        MaterialApp(
++          home: PageStorage(bucket: bucket, child: list()),
++        ),
++      );
++      await tester.pumpAndSettle();
++
++      bucket.writes = 0;
++      debugItemPositionComputations = 0;
++      final gesture = await tester.startGesture(const Offset(200, 200));
++      for (var i = 0; i < 20; i++) {
++        await gesture.moveBy(const Offset(0, -7));
++        await tester.pump(const Duration(milliseconds: 16));
++      }
++      expect(find.text('Item 0'), findsNothing);
++      expect(debugItemPositionComputations, 0);
++      expect(bucket.writes, 0);
++
++      // The position is saved once, when the scroll ends.
++      await gesture.up();
++      await tester.pumpAndSettle();
++      expect(debugItemPositionComputations, 1);
++      expect(bucket.writes, 1);
++    });
++
++    testWidgets('a drag with a listener still reports every frame', (
++      tester,
++    ) async {
++      final itemPositionsListener = ItemPositionsListener.create();
++      await setUpWidgetTest(
++        tester,
++        itemPositionsListener: itemPositionsListener,
++      );
++      await tester.pumpAndSettle();
++
++      await tester.drag(
++        find.byType(ScrollablePositionedList),
++        const Offset(0, -itemHeight * 2.5),
++      );
++      await tester.pumpAndSettle();
++
++      final first = itemPositionsListener.itemPositions.value.first;
++      expect(first.index, 2);
++      expect(first.itemLeadingEdge, -0.05);
++    });
++
++    testWidgets('a short scrollTo without a listener scrolls directly', (
++      tester,
++    ) async {
++      final itemScrollController = ItemScrollController();
++      await setUpWidgetTest(tester, itemScrollController: itemScrollController);
++      await tester.pumpAndSettle();
++
++      unawaited(
++        itemScrollController.scrollTo(index: 5, duration: scrollDuration),
++      );
++      await tester.pump();
++      await tester.pump(scrollDuration ~/ 2);
++      // A crossfade would build a second list.
++      expect(find.byType(PositionedList), findsOneWidget);
++      await tester.pumpAndSettle();
++
++      expect(tester.getTopLeft(find.text('Item 5')).dy, 0);
++    });
++
++    testWidgets('a long scrollTo without a listener follows the screen', (
++      tester,
++    ) async {
++      final itemScrollController = ItemScrollController();
++      await setUpWidgetTest(
++        tester,
++        itemScrollController: itemScrollController,
++        initialIndex: 100,
++      );
++      await tester.pumpAndSettle();
++
++      // Scroll by hand past index 300, so the anchor (100) is stale.
++      itemScrollController.jumpTo(index: 300);
++      await tester.pumpAndSettle();
++      unawaited(
++        itemScrollController.scrollTo(index: 200, duration: scrollDuration),
++      );
++      await tester.pumpAndSettle();
++
++      expect(tester.getTopLeft(find.text('Item 200')).dy, 0);
++    });
++
++    testWidgets(
++      'restores a dragged position in a PageView without a listener',
++      (tester) async {
++        tester.view.devicePixelRatio = 1.0;
++        tester.view.physicalSize = const Size(screenWidth, screenHeight);
++        addTearDown(tester.view.reset);
++        await tester.pumpWidget(
++          MaterialApp(
++            home: PageView(
++              children: [
++                list(key: const PageStorageKey('list')),
++                const Center(child: Text('Other page')),
++              ],
++            ),
++          ),
++        );
++
++        await tester.drag(
++          find.byType(ScrollablePositionedList),
++          const Offset(0, -itemHeight * 3.5),
++        );
++        await tester.pumpAndSettle();
++        // Touch slop eats part of the drag; only check that it moved.
++        final item3Top = tester.getTopLeft(find.text('Item 3')).dy;
++        expect(item3Top, lessThan(itemHeight));
++
++        await tester.drag(find.byType(PageView), const Offset(-500, 0));
++        await tester.pumpAndSettle();
++        expect(find.byType(ScrollablePositionedList), findsNothing);
++        await tester.drag(find.byType(PageView), const Offset(500, 0));
++        await tester.pumpAndSettle();
++
++        expect(tester.getTopLeft(find.text('Item 3')).dy, item3Top);
++      },
++    );
++
++    testWidgets('restores a jumped-to position in a TabBarView', (
++      tester,
++    ) async {
++      tester.view.devicePixelRatio = 1.0;
++      tester.view.physicalSize = const Size(screenWidth, screenHeight);
++      addTearDown(tester.view.reset);
++      final itemScrollController = ItemScrollController();
++      final tabController = TabController(length: 2, vsync: tester);
++      addTearDown(tabController.dispose);
++      await tester.pumpWidget(
++        MaterialApp(
++          home: TabBarView(
++            controller: tabController,
++            children: [
++              list(
++                key: const PageStorageKey('list'),
++                itemScrollController: itemScrollController,
++              ),
++              const Center(child: Text('Other tab')),
++            ],
++          ),
++        ),
++      );
++
++      itemScrollController.jumpTo(index: 42, alignment: 0.25);
++      await tester.pumpAndSettle();
++
++      tabController.index = 1;
++      await tester.pumpAndSettle();
++      expect(find.byType(ScrollablePositionedList), findsNothing);
++      tabController.index = 0;
++      await tester.pumpAndSettle();
++
++      expect(tester.getTopLeft(find.text('Item 42')).dy, screenHeight / 4);
++    });
++
++    testWidgets('a listener passed later gets positions straight away', (
++      tester,
++    ) async {
++      tester.view.devicePixelRatio = 1.0;
++      tester.view.physicalSize = const Size(screenWidth, screenHeight);
++      addTearDown(tester.view.reset);
++      final itemScrollController = ItemScrollController();
++      final first = ItemPositionsListener.create();
++      final second = ItemPositionsListener.create();
++      Future<void> pump(ItemPositionsListener? listener) => tester.pumpWidget(
++        MaterialApp(
++          home: list(
++            itemScrollController: itemScrollController,
++            itemPositionsListener: listener,
++          ),
++        ),
++      );
++
++      await pump(null);
++      itemScrollController.jumpTo(index: 30);
++      await tester.pumpAndSettle();
++
++      await pump(first);
++      await tester.pump();
++      expect(first.itemPositions.value.first.index, 30);
++
++      // Back to no listener, then a fresh one, without anything moving.
++      await pump(null);
++      await tester.pump();
++      await pump(second);
++      await tester.pump();
++      expect(second.itemPositions.value.first.index, 30);
++    });
++  });
+ }
+ 
+ /// A sliver that asks its viewport for a scroll offset correction on each of
