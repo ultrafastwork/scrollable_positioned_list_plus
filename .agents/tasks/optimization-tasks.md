@@ -85,6 +85,7 @@ The scroll-offset listener now survives the list swap. `ScrollOffsetController` 
 - **Low priority.** Do it after task 8, and only if it stays simple.
 
 ### 10. Remove dead state in the shrink-wrap viewport
+**Status:** done in agent/list-state-followups — removed `lastMainAxisExtent` and `growSize` (no references in `lib/`, `test/` or `example/`; `wrapping.dart` isn't exported).
 - **File:** `lib/src/wrapping.dart`: `lastMainAxisExtent` (line 136) is never read. `growSize` (line 809, written at line 342) is written but never read anywhere in `lib/`.
 - **Fix:** delete both. A pure cleanup; also check `test/` and `example/` for references first.
 

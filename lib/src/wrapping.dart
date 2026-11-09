@@ -133,8 +133,6 @@ class CustomRenderShrinkWrappingViewport extends CustomRenderViewport {
   @override
   bool get sizedByParent => false;
 
-  double lastMainAxisExtent = -1;
-
   static const int _maxLayoutCycles = 10;
 
   @override
@@ -372,7 +370,6 @@ class CustomRenderShrinkWrappingViewport extends CustomRenderViewport {
     }
     if (childLayoutGeometry.hasVisualOverflow) _hasVisualOverflow = true;
     _shrinkWrapExtent += childLayoutGeometry.maxPaintExtent;
-    growSize = _shrinkWrapExtent;
   }
 
   @override
@@ -838,8 +835,6 @@ abstract class CustomRenderViewport
   late double _minScrollExtent;
   late double _maxScrollExtent;
   bool _hasVisualOverflow = false;
-
-  double growSize = 0;
 
   @override
   bool get hasVisualOverflow => _hasVisualOverflow;
