@@ -107,7 +107,7 @@ Line numbers below are for `e72c4d4` (tip of `agent/list-state`), not `598e545`.
 - **Fix direction:** return early if `!mounted`, after completing the pending completers (see task 11). Verify first: this window may be impossible to hit in practice, since mount and post-frame happen in the same frame. If you can't reproduce it, mark it "not reproduced".
 
 ### 13. Position comparison is order-sensitive (low priority)
-**Status:** done in agent/list-state-followups — reproduced (drag away and back so items re-register out of order, then `jumpTo` the item already at the top: same positions, reversed order, listener fired once); both comparisons now use `samePositions` (`listEquals` fast path, then length + `setEquals`). Assigned lists are never sorted; when an update is skipped, listeners keep the previous value and its order.
+**Status:** done in agent/list-state-followups — reproduced (drag away and back so items re-register out of order, then `jumpTo` the item already at the top: same positions, reversed order, listener fired once); both comparisons now use `samePositions` (`listEquals` fast path, then length + `setEquals`). Assigned lists are never sorted; when an update is skipped, listeners keep the previous value and its order. **Superseded by `22d1e85`:** positions are now sorted by index when collected (owner-approved, in the changelog), and `samePositions` is a plain `listEquals`.
 - **Files:** `lib/src/positioned_list.dart` (~line 385) and `lib/src/scrollable_positioned_list.dart` `_updatePositions` (~line 764)
 - **Problem:** task 8 compares positions with `listEquals`, but they're collected by iterating a `Set<Element>` registry. If the same positions come back in a different order (for example after elements re-register), listeners are notified anyway. Harmless, just not fully deduplicated.
 - **Fix direction:** only if it stays cheap, for example sort by `index` before comparing, or compare as sets. Don't change the order users see unless the owner approves.
@@ -123,6 +123,16 @@ Line numbers below are for `e72c4d4` (tip of `agent/list-state`), not `598e545`.
 - **File:** `lib/src/scrollable_positioned_list.dart`, `_scrollTo`, the `_isTransitioning` branch (~line 557 at `ef8d53e`)
 - **Suspected problem:** a `scrollTo` issued while a transition is running cancels it and calls `_startScroll` from a post-frame callback with no `mounted` check. If the list is disposed before that callback runs, `_startScroll` touches the disposed controllers and `scrollCompleter` never completes, so `await scrollTo(...)` hangs.
 - **Fix direction:** in that callback, if `!mounted`, complete `scrollCompleter` and return. Write a reproducing test first; mark "not reproduced" if it can't be hit.
+
+## Previously skipped upstream tests (both fixed, now unskipped)
+
+### 16. An older deferred `scrollTo` cancels a newer one (google/flutter.widgets#171)
+**Status:** done on `main`. `scrollTo(100); scrollTo(200); scrollTo(300)` ended on 200: the second call cancels the transition (clearing `_isTransitioning`) and defers its start, so the third started immediately and was then canceled by the second's post-frame callback. Same for `jumpTo` after a deferred `scrollTo`. Every `_jumpTo`/`_scrollTo` now takes a `_scrollRequestId`; a `scrollTo` also defers while another deferred scroll is pending (`_deferredScrollId`), and a deferred callback that isn't the latest request completes its future and returns. Tests: the upstream test, plus "Task 16" in `test/list_state_regression_test.dart`.
+- **File:** `lib/src/scrollable_positioned_list.dart`, `_scrollTo` and `_jumpTo`
+
+### 17. `jumpTo` lands past the target after a manual scroll with variable heights (google/flutter.widgets#144)
+**Status:** done on `main`. After dragging to offset 2000, `jumpTo(100)` ended at offset 115 with item 101 at the top. Cause: jumping from index 0 changes the slivers from `[center, trailing]` to `[leading, center, trailing]`, and the unkeyed trailing `SliverPadding` was matched to the old one, so its `RenderSliverList` kept layout offsets from items 1–499 and applied a bogus scroll-offset correction. Fixed-height items hid this because the stale offsets happened to be right. The leading and trailing slivers are now keyed by `positionedIndex`, so a re-anchor builds fresh slivers. The scroll benchmark shows no difference beyond run-to-run noise (±10%).
+- **File:** `lib/src/positioned_list.dart`, `build`
 
 ---
 

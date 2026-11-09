@@ -2,6 +2,13 @@
 * `ItemPositionsListener.itemPositions` now reports positions sorted by index. The order used to depend on the order items were built in.
 * `ScrollOffsetListener.changes` is now a broadcast stream. It can have several listeners, and deltas emitted while nobody listens are dropped instead of being buffered in memory without limit (and replayed to a late listener).
 * `ItemScrollController.jumpTo` no longer reports a scroll offset change to `ScrollOffsetListener`. It used to report `-previousOffset` (even with `recordProgrammaticScrolls: false`), although nothing moved on screen.
+* Fix: when `scrollTo` (or `jumpTo`) is called several times during a long scroll, the latest call now wins. Previously an earlier `scrollTo` could start after a later one and cancel it, so the list stopped at the wrong item ([google/flutter.widgets#171](https://github.com/google/flutter.widgets/issues/171)).
+* Fix: `jumpTo` after a long manual scroll through items of different heights now places the item where requested. Previously the list could land a few items past the target ([google/flutter.widgets#144](https://github.com/google/flutter.widgets/issues/144)).
+* Fix: the future returned by `scrollTo` now always completes. It used to hang forever if the scroll was canceled (by `jumpTo`, another `scrollTo` or a tap) before its animation started, or if the list was removed from the tree first.
+* Fix: a long `scrollTo` animates in the right direction after the user has scrolled by hand. The direction used to come from the last item jumped or scrolled to, not from what was on screen.
+* Fix: a shrink-wrapped list whose content keeps changing size during layout now stops after 10 layout passes (with a descriptive error in debug mode) instead of hanging.
+* `ItemPositionsListener.itemPositions` listeners are no longer called when a rebuild leaves every position unchanged.
+* `ItemScrollController.jumpTo` and `ScrollOffsetController.animateScroll` now fail with a descriptive assert when the controller isn't attached to a list.
 * Migrate off deprecated Flutter APIs: `cacheExtent`/`cacheExtentStyle` → `ScrollCacheExtent`, `Matrix4.translate` → `translateByDouble`.
 * Remove the `collection` dependency and the discontinued `pedantic` dev dependency.
 * Adopt `flutter_lints` and modern Dart 3 idioms (super parameters, switch expressions, records).
