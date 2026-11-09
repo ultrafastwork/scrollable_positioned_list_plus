@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
@@ -377,7 +378,13 @@ class _PositionedListState extends State<PositionedList> {
             );
           }
         }
-        widget.itemPositionsNotifier?.itemPositions.value = positions;
+        final notifier = widget.itemPositionsNotifier?.itemPositions;
+        final current = notifier?.value;
+        // Skip the assignment (and the listener calls) when nothing moved.
+        if (notifier != null &&
+            !(current is List<ItemPosition> && listEquals(current, positions))) {
+          notifier.value = positions;
+        }
         updateScheduled = false;
       });
     }

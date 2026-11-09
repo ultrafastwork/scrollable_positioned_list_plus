@@ -224,6 +224,87 @@ void main() {
       );
     });
   });
+
+  group('Task 8: position listeners only fire when positions change', () {
+    testWidgets('parent rebuild with identical props does not notify', (
+      tester,
+    ) async {
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(screenWidth, screenHeight);
+      addTearDown(tester.view.reset);
+      final itemPositionsListener = ItemPositionsListener.create();
+      late StateSetter rebuildParent;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: StatefulBuilder(
+            builder: (context, setState) {
+              rebuildParent = setState;
+              return ScrollablePositionedList.builder(
+                itemCount: defaultItemCount,
+                itemPositionsListener: itemPositionsListener,
+                itemBuilder: (context, index) =>
+                    SizedBox(height: itemHeight, child: Text('Item $index')),
+              );
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(itemPositionsListener.itemPositions.value, isNotEmpty);
+
+      var notifications = 0;
+      void onPositions() => notifications++;
+      itemPositionsListener.itemPositions.addListener(onPositions);
+      addTearDown(
+        () => itemPositionsListener.itemPositions.removeListener(onPositions),
+      );
+
+      for (var i = 0; i < 3; i++) {
+        rebuildParent(() {});
+        await tester.pumpAndSettle();
+      }
+
+      expect(notifications, 0);
+    });
+
+    testWidgets('positions still update after the primary/secondary swap', (
+      tester,
+    ) async {
+      final itemScrollController = ItemScrollController();
+      final itemPositionsListener = ItemPositionsListener.create();
+      await setUpWidgetTest(
+        tester,
+        itemScrollController: itemScrollController,
+        itemPositionsListener: itemPositionsListener,
+      );
+
+      // Far enough to use the two-list transition, which ends in a swap.
+      unawaited(
+        itemScrollController.scrollTo(index: 300, duration: scrollDuration),
+      );
+      await tester.pumpAndSettle();
+      final positions = itemPositionsListener.itemPositions.value;
+      expect(
+        positions.firstWhere((position) => position.index == 300)
+            .itemLeadingEdge,
+        0,
+      );
+      expect(positions.every((position) => position.index >= 300), isTrue);
+
+      // And again after a manual drag on the new primary.
+      await tester.drag(
+        find.byType(ScrollablePositionedList),
+        const Offset(0, -2 * itemHeight),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        itemPositionsListener.itemPositions.value
+            .firstWhere((position) => position.index == 302)
+            .itemLeadingEdge,
+        0,
+      );
+    });
+  });
 }
 
 /// Task 3 is NEEDS OWNER DECISION: the fix lives in

@@ -5,6 +5,7 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
@@ -691,6 +692,7 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
     }
 
     if (mounted) {
+      var swapped = false;
       setState(() {
         if (opacity.value >= 0.5) {
           // Secondary [ListView] is more visible than the primary; make it the
@@ -703,10 +705,14 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
           if (primary.scrollController.hasClients) {
             previousOffset = primary.scrollController.offset;
           }
+          swapped = true;
         }
         _isTransitioning = false;
         opacity.parent = const AlwaysStoppedAnimation<double>(0);
       });
+      // The new primary's positions may not change again (so its notifier
+      // won't fire), but the user must now see them instead of the old ones.
+      if (swapped) _updatePositions();
     }
   }
 
@@ -747,7 +753,13 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
         ),
       );
     }
-    widget.itemPositionsNotifier?.itemPositions.value = itemPositions;
+    final notifier = widget.itemPositionsNotifier?.itemPositions;
+    final current = notifier?.value;
+    if (notifier != null &&
+        !(current is List<ItemPosition> &&
+            listEquals(current, itemPositions))) {
+      notifier.value = itemPositions;
+    }
   }
 }
 
