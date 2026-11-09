@@ -85,6 +85,31 @@ The scroll-offset listener now survives the list swap. `ScrollOffsetController` 
 - **File:** `lib/src/wrapping.dart`: `lastMainAxisExtent` (line 136) is never read. `growSize` (line 809, written at line 342) is written but never read anywhere in `lib/`.
 - **Fix:** delete both. A pure cleanup; also check `test/` and `example/` for references first.
 
+## Found while doing tasks 2–9 (not started)
+
+Line numbers below are for `e72c4d4` (tip of `agent/list-state`), not `598e545`. Tasks 11 and 12 edit `lib/src/scrollable_positioned_list.dart`, so do them after the group above or with the same agent.
+
+### 11. `scrollTo` future hangs if the list is disposed before the transition starts
+- **File:** `lib/src/scrollable_positioned_list.dart`, `dispose` (~line 409)
+- **Problem:** task 2 completes a long scroll's pending futures in `_stopScroll`, but `dispose` doesn't. If the list is removed after `scrollTo(index: far)` and before the secondary list mounts, `await scrollTo(...)` never completes.
+- **Fix direction:** call `_cancelPendingStart()` in `dispose`.
+- **Acceptance:** a test that calls `scrollTo(index: far)`, then replaces the list with an empty widget before pumping. The returned future must complete.
+
+### 12. Long-scroll start callback has no `mounted` guard
+- **File:** `lib/src/scrollable_positioned_list.dart`, `startAnimationCallback`'s post-frame callback (~line 623)
+- **Problem:** the post-frame callback creates `AnimationController(vsync: this)` and drives both scroll controllers without checking `mounted`. If the list is disposed between the secondary list mounting and that post-frame callback, it runs on a disposed state.
+- **Fix direction:** return early if `!mounted`, after completing the pending completers (see task 11). Verify first: this window may be impossible to hit in practice, since mount and post-frame happen in the same frame. If you can't reproduce it, mark it "not reproduced".
+
+### 13. Position comparison is order-sensitive (low priority)
+- **Files:** `lib/src/positioned_list.dart` (~line 385) and `lib/src/scrollable_positioned_list.dart` `_updatePositions` (~line 764)
+- **Problem:** task 8 compares positions with `listEquals`, but they're collected by iterating a `Set<Element>` registry. If the same positions come back in a different order (for example after elements re-register), listeners are notified anyway. Harmless, just not fully deduplicated.
+- **Fix direction:** only if it stays cheap, for example sort by `index` before comparing, or compare as sets. Don't change the order users see unless the owner approves.
+
+### 14. Add `.gitattributes` for line endings
+- **File:** new `.gitattributes` at the repo root
+- **Problem:** with no `.gitattributes`, commits on Windows warn "LF will be replaced by CRLF", and line endings depend on each contributor's `core.autocrlf`.
+- **Fix:** add `* text=auto eol=lf` (plus `binary` entries for any binary assets), then run `git add --renormalize .` and check that the diff is empty or endings-only. Commit as `chore:`.
+
 ---
 
 ## Investigated and rejected (don't pick up)
