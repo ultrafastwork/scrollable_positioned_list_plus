@@ -60,7 +60,7 @@ class _RegisteredElement extends ProxyElement {
   @override
   void notifyClients(ProxyWidget oldWidget) {}
 
-  late _RegistryWidgetState _registryWidgetState;
+  _RegistryWidgetState? _registryWidgetState;
 
   @override
   void mount(Element? parent, Object? newSlot) {
@@ -75,18 +75,26 @@ class _RegisteredElement extends ProxyElement {
   }
 
   void _register() {
-    _registryWidgetState =
+    final registry =
         dependOnInheritedWidgetOfExactType<_InheritedRegistryWidget>()!.state;
-    _registryWidgetState.registeredElements.add(this);
-    _registryWidgetState.widget.elementNotifier?.value =
-        _registryWidgetState.registeredElements;
+    final previous = _registryWidgetState;
+    // Moved under another registry (GlobalKey reparenting): leave the old one.
+    if (previous != null && !identical(previous, registry)) {
+      _unregisterFrom(previous);
+    }
+    _registryWidgetState = registry;
+    registry.registeredElements.add(this);
+    registry.widget.elementNotifier?.value = registry.registeredElements;
+  }
+
+  void _unregisterFrom(_RegistryWidgetState registry) {
+    registry.registeredElements.remove(this);
+    registry.widget.elementNotifier?.value = registry.registeredElements;
   }
 
   @override
   void unmount() {
-    _registryWidgetState.registeredElements.remove(this);
-    _registryWidgetState.widget.elementNotifier?.value =
-        _registryWidgetState.registeredElements;
+    _unregisterFrom(_registryWidgetState!);
     super.unmount();
   }
 }

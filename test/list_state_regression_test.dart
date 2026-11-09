@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrollable_positioned_list_plus/scrollable_positioned_list_plus.dart';
+import 'package:scrollable_positioned_list_plus/src/element_registry.dart';
 
 const screenHeight = 400.0;
 const screenWidth = 400.0;
@@ -198,6 +199,42 @@ void main() {
 
       await tester.pumpAndSettle();
       expect(firstVisibleIndex(itemPositionsListener), 100);
+    });
+  });
+
+  group('Task 5: element registry drops entries after reparenting', () {
+    testWidgets('GlobalKey subtree moved to another registry', (tester) async {
+      final notifierA = ValueNotifier<Set<Element>?>(null);
+      final notifierB = ValueNotifier<Set<Element>?>(null);
+      addTearDown(notifierA.dispose);
+      addTearDown(notifierB.dispose);
+      final movingKey = GlobalKey();
+      Widget item() => KeyedSubtree(
+        key: movingKey,
+        child: const RegisteredElementWidget(child: SizedBox()),
+      );
+      Widget build({required bool inA}) => Directionality(
+        textDirection: TextDirection.ltr,
+        child: Column(
+          children: [
+            RegistryWidget(
+              elementNotifier: notifierA,
+              child: inA ? item() : const SizedBox(),
+            ),
+            RegistryWidget(
+              elementNotifier: notifierB,
+              child: inA ? const SizedBox() : item(),
+            ),
+          ],
+        ),
+      );
+
+      await tester.pumpWidget(build(inA: true));
+      expect(notifierA.value, hasLength(1));
+
+      await tester.pumpWidget(build(inA: false));
+      expect(notifierB.value, hasLength(1));
+      expect(notifierA.value, isEmpty);
     });
   });
 
@@ -489,10 +526,7 @@ void main() {
       itemScrollController.jumpTo(index: 5);
       await tester.pumpAndSettle();
 
-      expect(
-        itemPositionsListener.itemPositions.value.toSet(),
-        before.toSet(),
-      );
+      expect(itemPositionsListener.itemPositions.value.toSet(), before.toSet());
       expect(notifications, 0);
     });
   });
