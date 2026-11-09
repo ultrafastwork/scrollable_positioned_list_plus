@@ -619,6 +619,62 @@ void main() {
       expect(indices, [...indices]..sort());
     });
   });
+
+  group('Task 16: the latest scroll request wins', () {
+    testWidgets('two scrollTo calls issued mid-transition', (tester) async {
+      final itemScrollController = ItemScrollController();
+      await setUpWidgetTest(tester, itemScrollController: itemScrollController);
+
+      unawaited(
+        itemScrollController.scrollTo(index: 100, duration: scrollDuration),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // The first is deferred because a transition is running. The second
+      // must not start before it and then be canceled by it.
+      final completed = <int>[];
+      unawaited(
+        itemScrollController
+            .scrollTo(index: 200, duration: scrollDuration)
+            .then((_) => completed.add(200)),
+      );
+      unawaited(
+        itemScrollController
+            .scrollTo(index: 300, duration: scrollDuration)
+            .then((_) => completed.add(300)),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Item 200'), findsNothing);
+      expect(tester.getTopLeft(find.text('Item 300')).dy, 0);
+      expect(completed, unorderedEquals([200, 300]));
+    });
+
+    testWidgets('jumpTo after a deferred scrollTo', (tester) async {
+      final itemScrollController = ItemScrollController();
+      await setUpWidgetTest(tester, itemScrollController: itemScrollController);
+
+      unawaited(
+        itemScrollController.scrollTo(index: 300, duration: scrollDuration),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      var completed = false;
+      unawaited(
+        itemScrollController
+            .scrollTo(index: 200, duration: scrollDuration)
+            .then((_) => completed = true),
+      );
+      itemScrollController.jumpTo(index: 50);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Item 200'), findsNothing);
+      expect(tester.getTopLeft(find.text('Item 50')).dy, 0);
+      expect(completed, isTrue);
+    });
+  });
 }
 
 /// A sliver that asks its viewport for a scroll offset correction on each of

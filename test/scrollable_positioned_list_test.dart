@@ -1314,7 +1314,6 @@ void main() {
       expect(itemFinder, findsOneWidget);
       expect(tester.getTopLeft(itemFinder).dy, 0);
     },
-    skip: true,
   );
 
   testWidgets(

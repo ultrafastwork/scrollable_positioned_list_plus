@@ -339,6 +339,14 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
   /// stop its successor's transition when its own future completes.
   int _transitionId = 0;
 
+  /// Identifies the latest [_jumpTo] or [_scrollTo] call, so a deferred
+  /// scroll that has been superseded doesn't start after its successor.
+  int _scrollRequestId = 0;
+
+  /// Request id of the [_scrollTo] whose start is waiting for a post-frame
+  /// callback, if any. Later scrolls queue behind it instead of starting first.
+  int? _deferredScrollId;
+
   bool _isTransitioning = false;
 
   AnimationController? _animationController;
@@ -531,6 +539,9 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
   int _clampIndex(int index) => index.clamp(0, max(0, widget.itemCount - 1));
 
   void _jumpTo({required int index, required double alignment}) {
+    // Supersedes any deferred scroll; its callback sees the newer id.
+    _scrollRequestId++;
+    _deferredScrollId = null;
     _stopScroll(canceled: true);
     index = _clampIndex(index);
     setState(() {
@@ -552,11 +563,17 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
     required List<double> opacityAnimationWeights,
   }) async {
     index = _clampIndex(index);
-    if (_isTransitioning) {
+    final requestId = ++_scrollRequestId;
+    // Also defer behind a pending deferred scroll: _stopScroll has already
+    // cleared _isTransitioning, and starting now would let that older scroll
+    // start afterwards and cancel this one.
+    if (_isTransitioning || _deferredScrollId != null) {
       final scrollCompleter = Completer<void>();
+      _deferredScrollId = requestId;
       _stopScroll(canceled: true);
       SchedulerBinding.instance.addPostFrameCallback((_) async {
-        if (!mounted) {
+        if (_deferredScrollId == requestId) _deferredScrollId = null;
+        if (!mounted || requestId != _scrollRequestId) {
           scrollCompleter.complete();
           return;
         }
