@@ -7,6 +7,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scrollable_positioned_list_plus/scrollable_positioned_list_plus.dart';
 
@@ -364,6 +365,108 @@ void main() {
       expect(completed, isTrue);
     });
   });
+
+  group('Task 12: long-scroll start callback tolerates disposal', () {
+    testWidgets('list disposed after the secondary list mounts, same frame', (
+      tester,
+    ) async {
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(screenWidth, screenHeight);
+      addTearDown(tester.view.reset);
+      final itemScrollController = ItemScrollController();
+      final list = ScrollablePositionedList.builder(
+        itemCount: defaultItemCount,
+        itemScrollController: itemScrollController,
+        itemBuilder: (context, index) =>
+            SizedBox(height: itemHeight, child: Text('Item $index')),
+      );
+      late StateSetter rebuildParent;
+      var layoutTwice = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: StatefulBuilder(
+            builder: (context, setState) {
+              rebuildParent = setState;
+              return _LayoutTwice(
+                enabled: layoutTwice,
+                child: LayoutBuilder(
+                  builder: (context, constraints) =>
+                      constraints.maxHeight > screenHeight / 2
+                      ? list
+                      : const SizedBox(),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+
+      var completed = false;
+      unawaited(
+        itemScrollController
+            .scrollTo(index: 300, duration: scrollDuration)
+            .then((_) => completed = true),
+      );
+      // In the next frame the list builds (and mounts) its secondary list on
+      // the first layout pass, then is removed on the second pass and disposed
+      // before the start callback's post-frame callback runs.
+      rebuildParent(() => layoutTwice = true);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ScrollablePositionedList), findsNothing);
+      // Before task 11's fix: `AnimationController(vsync: this)` threw
+      // "This widget has been unmounted" and the future never completed.
+      expect(tester.takeException(), isNull);
+      expect(completed, isTrue);
+    });
+  });
+}
+
+/// Lays its child out twice per layout when [enabled]: first slightly smaller
+/// than its own constraints, then at a quarter of their height. Lets a test
+/// remove a widget in the same frame, after it has been laid out.
+class _LayoutTwice extends SingleChildRenderObjectWidget {
+  const _LayoutTwice({required this.enabled, super.child});
+
+  final bool enabled;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderLayoutTwice(enabled);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderLayoutTwice renderObject,
+  ) => renderObject.enabled = enabled;
+}
+
+class _RenderLayoutTwice extends RenderProxyBox {
+  _RenderLayoutTwice(this._enabled);
+
+  bool _enabled;
+  set enabled(bool value) {
+    if (value == _enabled) return;
+    _enabled = value;
+    markNeedsLayout();
+  }
+
+  @override
+  void performLayout() {
+    final child = this.child!;
+    if (!_enabled) {
+      child.layout(constraints, parentUsesSize: true);
+    } else {
+      final biggest = constraints.biggest;
+      child.layout(
+        BoxConstraints.tight(Size(biggest.width, biggest.height - 1)),
+      );
+      child.layout(
+        BoxConstraints.tight(Size(biggest.width, biggest.height / 4)),
+      );
+    }
+    size = constraints.biggest;
+  }
 }
 
 class _CountingBucket extends PageStorageBucket {
