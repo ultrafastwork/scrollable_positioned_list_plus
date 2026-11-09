@@ -16,12 +16,12 @@ This file is the index. Each task has its own file in this directory with the fu
 
 ## Open tasks
 
-Recommended order: **18 → 20 → 21.** (19, 22 and 23 are done.)
+Recommended order: **18 → 20 → 21.** (19, 22 and 23 are done. 18 and 20 are blocked on owner decisions, so 21 is the next one that can be picked up.)
 
 | # | Task | Area | Status |
 |---|------|------|--------|
 | 18 | [Shrink the default cache extent](18-default-cache-extent.md) — NEEDS OWNER DECISION | performance | blocked on owner decision (measured: about 25 % less build time while dragging, long-scroll jank frame halved; recommendation in the file) |
-| 20 | [Fixed-extent mode (`itemExtent` / `prototypeItem`)](20-fixed-extent-mode.md) — NEEDS OWNER DECISION | performance, new API | not started |
+| 20 | [Fixed-extent mode (`itemExtent` / `prototypeItem`)](20-fixed-extent-mode.md) — NEEDS OWNER DECISION | performance, new API | blocked on owner decision (prototype measured: direct `scrollTo` beats the crossfade up to about 10 screens, no gain while dragging; recommendation in the file) |
 | 21 | [Reduce the cost of the long-scroll crossfade](21-transition-cost.md) (low priority) | performance | not started |
 
 **File conflicts:**
