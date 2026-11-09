@@ -7,7 +7,7 @@ This file is the index. Each task has its own file in this directory with the fu
 
 ## Ground rules for every task
 
-- **Don't break existing behaviour.** On `a0ee16b`, `flutter test` gives 204 passed and 0 skipped. That must still hold after your change (plus any tests you add), and `flutter analyze` must report no issues. For tasks 1–10 the baseline was `598e545` (182 passed, 2 skipped).
+- **Don't break existing behaviour.** On the task 23 commit, `flutter test` gives 206 passed and 0 skipped (204 on `a0ee16b`). That must still hold after your change (plus any tests you add), and `flutter analyze` must report no issues. For tasks 1–10 the baseline was `598e545` (182 passed, 2 skipped).
 - **Prove the bug first.** For a correctness task, add a regression test that fails before your fix and passes with it. Check this by stashing `lib/`, running the test, then restoring.
 - **Prove the gain.** For a performance task, record before/after numbers in the task file, from the [task 22](22-device-profiling-harness.md) device harness if a device is available, otherwise from `flutter test benchmark/scroll_benchmark_test.dart` (relative numbers only). If there's no measurable gain, don't merge: record the numbers and close the task as "not worth it".
 - **Ask before changing public behaviour.** If a task is marked **NEEDS OWNER DECISION**, don't change observable behaviour or add public API without the owner's approval. Implement it behind the approved option only, and add a changelog entry.
@@ -16,17 +16,16 @@ This file is the index. Each task has its own file in this directory with the fu
 
 ## Open tasks
 
-Recommended order: **23 → 18 → 20 → 21.** (19 and 22 are done.)
+Recommended order: **18 → 20 → 21.** (19, 22 and 23 are done.)
 
 | # | Task | Area | Status |
 |---|------|------|--------|
-| 23 | [A newly passed `itemPositionsListener` stays empty until something moves](23-new-listener-stays-empty.md) | correctness | not started |
 | 18 | [Shrink the default cache extent](18-default-cache-extent.md) — NEEDS OWNER DECISION | performance | blocked on owner decision (measured: about 25 % less build time while dragging, long-scroll jank frame halved; recommendation in the file) |
 | 20 | [Fixed-extent mode (`itemExtent` / `prototypeItem`)](20-fixed-extent-mode.md) — NEEDS OWNER DECISION | performance, new API | not started |
 | 21 | [Reduce the cost of the long-scroll crossfade](21-transition-cost.md) (low priority) | performance | not started |
 
 **File conflicts:**
-- Tasks 18, 20, 21 and 23 all edit `lib/src/scrollable_positioned_list.dart`, and 20 also edits `lib/src/positioned_list.dart`. Give them to one agent or do them one after another.
+- Tasks 18, 20 and 21 all edit `lib/src/scrollable_positioned_list.dart`, and 20 also edits `lib/src/positioned_list.dart`. Give them to one agent or do them one after another.
 - Task 20 should also add `itemExtent` scenarios to `example/integration_test/perf_test.dart` (scenario 6 of task 22).
 
 **Running the device harness (task 22):** connect a real Android or iOS device (`fvm flutter devices`), then from `example/` run:
@@ -59,6 +58,7 @@ fvm flutter drive --profile --no-dds --driver=test_driver/perf_driver.dart --tar
 | 15 | [Re-entrant `scrollTo` runs on a disposed list](15-reentrant-scroll-to-after-dispose.md) | done |
 | 16 | [An older deferred `scrollTo` cancels a newer one (google/flutter.widgets#171)](16-older-deferred-scroll-to-wins.md) | done |
 | 17 | [`jumpTo` lands past the target after a manual scroll with variable heights (google/flutter.widgets#144)](17-jump-to-overshoots-variable-heights.md) | done |
+| 23 | [A newly passed `itemPositionsListener` stays empty until something moves](23-new-listener-stays-empty.md) | done |
 
 ### Performance
 

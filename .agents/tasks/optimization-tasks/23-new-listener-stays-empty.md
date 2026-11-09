@@ -2,7 +2,7 @@
 
 **Area:** correctness · **Line numbers:** `757f284`
 
-**Status:** not started.
+**Status:** done. `didUpdateWidget` now schedules a post-frame `_updatePositions()` (guarded by `mounted`) when a new, non-identical `itemPositionsNotifier` arrives. Regression tests in `test/list_state_regression_test.dart` (group "Task 23"): null → A, A → B, null → C, and a listener that calls `setState` (gets exactly one notification, no exception). Both failed before the fix. `flutter test`: 206 passed, 0 skipped; `flutter analyze` clean.
 
 - **Files:** `lib/src/scrollable_positioned_list.dart` (`didUpdateWidget` lines 435-462, `_updatePositions` lines 764-787).
 - **Problem:** if a rebuild passes an `itemPositionsListener` to a list that already exists, `itemPositions.value` stays `[]` until the list scrolls or its positions change for another reason. That covers adding a listener where there was none, and swapping one listener for another. `_updatePositions` only runs when the internal per-list notifier fires. That notifier only fires when the computed positions differ from the last ones (task 8), and they don't, because nothing moved.

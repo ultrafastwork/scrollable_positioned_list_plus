@@ -450,6 +450,20 @@ class _ScrollablePositionedListState extends State<ScrollablePositionedList>
       widget.scrollOffsetController?._attach(this);
     }
 
+    // A newly passed position listener would otherwise stay empty until the
+    // positions change, because the internal notifier only fires on change.
+    // Hand it the current positions after this frame, not now: assigning
+    // during build would call the app's listeners mid-build.
+    if (widget.itemPositionsNotifier != null &&
+        !identical(
+          widget.itemPositionsNotifier,
+          oldWidget.itemPositionsNotifier,
+        )) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _updatePositions();
+      });
+    }
+
     // No setState needed: build always runs after didUpdateWidget.
     if (widget.itemCount == 0) {
       primary.target = 0;

@@ -675,6 +675,91 @@ void main() {
       expect(completed, isTrue);
     });
   });
+
+  group('Task 23: a newly passed listener gets positions straight away', () {
+    testWidgets('no listener -> listener, and listener A -> listener B', (
+      tester,
+    ) async {
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(screenWidth, screenHeight);
+      addTearDown(tester.view.reset);
+      final itemScrollController = ItemScrollController();
+      final first = ItemPositionsListener.create();
+      final second = ItemPositionsListener.create();
+      final third = ItemPositionsListener.create();
+      Future<void> pump(ItemPositionsListener? listener) => tester.pumpWidget(
+        MaterialApp(
+          home: ScrollablePositionedList.builder(
+            itemCount: defaultItemCount,
+            itemScrollController: itemScrollController,
+            itemPositionsListener: listener,
+            itemBuilder: (context, index) =>
+                SizedBox(height: itemHeight, child: Text('Item $index')),
+          ),
+        ),
+      );
+
+      await pump(null);
+      itemScrollController.jumpTo(index: 30);
+      await tester.pumpAndSettle();
+
+      // No listener -> listener.
+      await pump(first);
+      await tester.pump();
+      expect(first.itemPositions.value.first.index, 30);
+
+      // Listener A -> listener B, without anything moving.
+      await pump(second);
+      await tester.pump();
+      expect(second.itemPositions.value.first.index, 30);
+
+      // Back to no listener, then a fresh one.
+      await pump(null);
+      await tester.pump();
+      await pump(third);
+      await tester.pump();
+      expect(third.itemPositions.value.first.index, 30);
+    });
+
+    testWidgets('a listener that calls setState does not throw', (
+      tester,
+    ) async {
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(screenWidth, screenHeight);
+      addTearDown(tester.view.reset);
+      final listener = ItemPositionsListener.create();
+      var notified = 0;
+      late StateSetter setOuterState;
+      ItemPositionsListener? current;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: StatefulBuilder(
+            builder: (context, setState) {
+              setOuterState = setState;
+              return ScrollablePositionedList.builder(
+                itemCount: defaultItemCount,
+                itemPositionsListener: current,
+                itemBuilder: (context, index) =>
+                    SizedBox(height: itemHeight, child: Text('Item $index')),
+              );
+            },
+          ),
+        ),
+      );
+      listener.itemPositions.addListener(() {
+        notified++;
+        setOuterState(() {});
+      });
+
+      setOuterState(() => current = listener);
+      await tester.pump();
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+      expect(notified, 1);
+      expect(listener.itemPositions.value.first.index, 0);
+    });
+  });
 }
 
 /// A sliver that asks its viewport for a scroll offset correction on each of
